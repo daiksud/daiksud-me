@@ -134,13 +134,17 @@ Workerの **Settings → Build** で、ビルドコマンドを `bun run build` 
 
 Workers Buildsは [bun.lock](bun.lock) から依存関係のインストーラーを選び、[package.json](package.json) の `packageManager` からBunのバージョンを選びます。ビルドコマンドはCloudflare側の外部設定なので、リポジトリのファイルを変更しても更新されません。移行時には、ビルド設定と実際のPreviewビルドログの両方を確認してください。Cloudflareの[ビルド設定](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)と[ビルドイメージ・バージョンの選択](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)を参照してください。
 
-### Codexの承認自動化
+### Codexの承認自動化とRulesetsの責務
 
-[承認ワークフロー](.github/workflows/approve-codex-review.yml)は、agentsの更新され続ける `main` ではなく、[承認済みのソースリビジョン](https://github.com/daiksud/agents/blob/2e0067890bc39f94a8ff9580bd58ba093a3a9428/.github/workflows/approve-codex-review.yml)（blob `67e6e65c5a13e9cf87eaa2240a52dc583d88fd9f`）をコピーしたものです。`chatgpt-codex-connector[bot]` がPRのCodex Review Summaryコメントを作成・編集すると、そのSummaryを再取得し、Code ReviewとSecurity Reviewの両方が `Completed` であることを確認します。同じCodexアカウントによる👍リアクションがPR本文に付いている場合だけ、`gh pr review --approve` で承認します。ほかのユーザーによるリアクションは対象にしません。
+[承認ワークフロー](.github/workflows/approve-codex-review.yml)は、現在のHEADに対する信頼できるCodexのコード・セキュリティレビュー結果を解釈し、そのコミットを承認します。BotとAppの識別、両レビューの完了、指摘の状態、Codexの👍を確認します。セキュリティの指摘フラグがnullの場合は、同じHEADに対する種類別の最新の信頼できるreceiptで問題なしを確認し、省略SHAを完全なSHAに解決します。送信直前にも証跡、👍、PRがopenであること、HEADを再確認し、正確な `commit_id` で承認を送信します。
 
-両方のレビューが完了していても👍がない場合は、初回の確認後、30秒ごとに最大6回再確認します（待機時間は180秒）。再確認のたびにSummaryを読み直し、どちらかのレビューが未完了なら承認せず終了します。待機時間の上限に達した場合は正常終了し、APIや承認処理でエラーが発生した場合は実行を失敗にします。待機時間が終わった後に再び確認するには、Summaryの新規作成または編集が必要です。
+同じHEADの完了結果と既存の👍は再利用します。新しい依頼、コメントの時刻、👍の古さだけを理由に同じコードの再レビューを要求しません。時刻に基づく編集・証跡再利用の検知や、どのbaseとの差分がレビューされたかの証明は行いません。workflowの成功には承認保留も含まれ、承認されたことやマージ可能であることと同義ではありません。
 
-コピー元のリビジョンと同様に、レビュー対象のコミットとHEADの比較、リアクションの時刻による絞り込み、既存の承認の取り消しは行いません。そのため、古い完了済みSummaryと既存の👍によって新しいコードが承認される可能性があります。レビューの鮮度は意図的に保証していません。このワークフローはPRのコードをチェックアウトせず、CIの完了待ちやPRのマージも行いません。必須CI、Preview、CodeQL、レビューの保護ルールは、それぞれ独立して維持します。
+古い承認の失効、必須チェック、baseとの同期などのマージ条件はRulesetsが担います。2026-11-01に読み取った [default Ruleset](https://github.com/daiksudme/apex/rules/23758136) は `main` に対して有効で、`dismiss_stale_reviews_on_push: true`、`pass` に対する `strict_required_status_checks_policy: true`、`preview` へのDeployment成功を要求していました。実際のマージ判断では有効なルールとbypass権限を再確認してください。この変更では設定を変更しません。
+
+GitHubの[承認失効条件](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-pull-request-reviews-before-merging)は、承認済みの差分の変化やmerge baseから導入された変更に基づきます。「HEADのSHAが変われば常に失効する」「mainが進めば必ず失効する」とは断定しません。[strictな必須チェック](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging)はマージ前のbase最新化を要求しますが、Codexが特定のbaseをレビューした証明ではありません。workflowはbase履歴を追跡せず、承認を取り消したりマージしたりしません。必須CI、Preview、レビューなどの保護は独立した条件です。
+
+承認workflowは信頼できるSummaryの作成・編集と `ci-pr` の成功完了を契機に実行します。👍がない場合の待機は初回確認後30秒ごとに最大6回です。待機の上限では承認を保留し、APIの失敗では実行を失敗にします。待機はレビュー完了の証拠ではありません。
 
 ### PRの検証
 

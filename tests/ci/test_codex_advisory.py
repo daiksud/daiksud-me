@@ -53,36 +53,36 @@ class CodexAdvisoryTests(unittest.TestCase):
                 del data["comments"][missing]
                 self.assert_withheld(approval.execute(data), "completion receipts")
 
-    def test_prior_cycle_still_requires_both_receipts(self):
+    def test_prior_cycle_receipts_do_not_invalidate_completed_current_head(self):
         data = with_prior_cycle()
         del data["comments"][3]
-        self.assert_withheld(approval.execute(data), "overlapping or unidentifiable")
+        self.assert_approved(approval.execute(data))
 
-    def test_duplicate_and_contradictory_receipts_are_not_ignored(self):
-        for body in [
-            approval.fixture()["comments"][2]["body"],
-            "<!-- codex-review-receipt:v1 -->\n\nCodex Review: Found a major issue.",
-            "<!-- codex-review-receipt:v2 -->\n\nUnknown receipt format.",
-            "Codex Review: Found a major issue.",
-        ]:
-            with self.subTest(body=body):
-                data = with_advisory()
-                data["comments"].append(approval.comment(6, body, "2026-10-31T11:31:07Z"))
-                self.assert_withheld(approval.execute(data), "completion receipts")
+    def test_duplicate_clean_receipt_for_same_head_is_accepted(self):
+        data = with_advisory()
+        body = data["comments"][2]["body"]
+        data["comments"].append(approval.comment(6, body, "2026-10-31T11:31:07Z"))
+        self.assert_approved(approval.execute(data))
 
-    def test_unknown_or_augmented_setup_messages_still_withhold(self):
-        for body in [ADVISORY + "\nSecurity findings remain.", ADVISORY.replace("environments", "other"), "Review failed; please retry."]:
+    def test_latest_same_head_receipt_with_findings_withholds(self):
+        data = with_advisory()
+        body = data["comments"][2]["body"].replace("Didn't find any major issues.", "Found a major issue.")
+        data["comments"].append(approval.comment(6, body, "2026-10-31T11:31:07Z"))
+        self.assert_withheld(approval.execute(data), "no findings")
+
+    def test_unrelated_bot_notices_do_not_replace_review_evidence(self):
+        for body in [ADVISORY + "\nMore information.", "Review service setup notice."]:
             with self.subTest(body=body):
                 data = with_advisory()
                 data["comments"][-1]["body"] = body
-                self.assert_withheld(approval.execute(data), "completion receipts")
+                self.assert_approved(approval.execute(data))
 
-    def test_edited_or_undated_advisory_is_not_ignored(self):
+    def test_edited_or_undated_advisory_is_ignored(self):
         for created, updated in [("2026-10-31T11:30:20Z", "2026-10-31T11:30:21Z"), (None, None)]:
             with self.subTest(created=created):
                 data = with_advisory()
                 data["comments"][-1].update(created_at=created, updated_at=updated)
-                self.assert_withheld(approval.execute(data))
+                self.assert_approved(approval.execute(data))
 
     def test_advisory_cannot_replace_trusted_clean_review_evidence(self):
         for missing in ["summary", "receipt", "reaction", "completed", "head", "clean"]:

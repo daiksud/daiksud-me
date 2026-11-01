@@ -134,17 +134,17 @@ class CodexApprovalTests(unittest.TestCase):
                 data["comments"][0]["body"] = body
                 self.assert_approved(execute(data))
 
-    def test_non_command_first_lines_are_not_review_boundaries(self):
+    def test_request_wording_does_not_invalidate_completed_reviews(self):
         for body in ["", "\n@codex review", "Please check this.\n@codex review", "> @codex review", "```\n@codex review\n```", "@codex review please", "@codex security review"]:
             with self.subTest(body=body):
                 data = fixture()
                 data["comments"][0]["body"] = body
-                self.assert_withheld(execute(data))
+                self.assert_approved(execute(data))
 
-    def test_edited_request_is_withheld(self):
+    def test_edited_request_is_accepted(self):
         data = fixture()
         data["comments"][0].update(body="@codex review\nExplanation", updated_at="2026-10-31T11:30:18Z")
-        self.assert_withheld(execute(data), "unedited")
+        self.assert_approved(execute(data))
 
     def test_explanation_is_accepted_after_base_retarget(self):
         data = fixture()
@@ -152,27 +152,36 @@ class CodexApprovalTests(unittest.TestCase):
         data["timeline"] = [{"id": 20, "event": "base_ref_changed", "created_at": "2026-10-31T11:30:00Z"}]
         self.assert_approved(execute(data))
 
-    def test_base_retarget_after_request_is_withheld(self):
+    def test_base_retarget_after_request_is_accepted_without_freshness_proof(self):
         data = fixture()
         data["comments"][0]["body"] = "@codex review\nExplanation"
         data["timeline"] = [{"id": 20, "event": "base_ref_changed", "created_at": "2026-10-31T11:30:20Z"}]
-        self.assert_withheld(execute(data), "base changed")
+        self.assert_approved(execute(data))
 
-    def test_edited_request_after_retarget_is_withheld(self):
+    def test_edited_request_after_retarget_is_accepted(self):
         data = fixture()
         data["comments"][0]["updated_at"] = "2026-10-31T11:30:18Z"
         data["timeline"] = [{"id": 20, "event": "base_ref_changed", "created_at": "2026-10-31T11:30:00Z"}]
-        self.assert_withheld(execute(data), "unedited")
+        self.assert_approved(execute(data))
 
-    def test_stale_missing_and_same_second_thumbs_up_are_withheld(self):
-        for time in [None, "2026-10-31T11:32:32Z", "2026-10-31T11:32:33Z"]:
-            with self.subTest(time=time):
+    def test_old_same_second_and_missing_reaction_times_are_accepted(self):
+        for at in [None, "invalid", "2026-10-31T11:32:32Z", "2026-10-31T11:32:33Z"]:
+            with self.subTest(at=at):
                 data = fixture()
-                if time:
-                    data["reactions"][0]["created_at"] = time
-                else:
-                    data["reactions"] = []
-                self.assert_withheld(execute(data), "no fresh Codex thumbs-up")
+                data["reactions"][0]["created_at"] = at
+                self.assert_approved(execute(data))
+
+    def test_missing_thumbs_up_is_withheld(self):
+        data = fixture()
+        data["reactions"] = []
+        self.assert_withheld(execute(data), "no Codex thumbs-up")
+
+    def test_missing_evidence_times_are_accepted(self):
+        data = fixture()
+        for item in data["comments"]:
+            item.pop("created_at", None)
+            item.pop("updated_at", None)
+        self.assert_approved(execute(data))
 
     def test_untrusted_summary_identity_or_app_is_withheld(self):
         for field in ["user", "performed_via_github_app"]:
@@ -184,7 +193,7 @@ class CodexApprovalTests(unittest.TestCase):
     def test_untrusted_thumbs_up_is_withheld(self):
         data = fixture()
         data["reactions"][0]["user"]["id"] = 1
-        self.assert_withheld(execute(data), "no fresh Codex thumbs-up")
+        self.assert_withheld(execute(data), "no Codex thumbs-up")
 
     def test_incomplete_reviews_wrong_head_and_findings_are_withheld(self):
         for old, new in [('"status": "completed"', '"status": "in_progress"'), (HEAD, "b" * 40), ('"has_unresolved_findings": false', '"has_unresolved_findings": true'), ('"has_any_findings": null', '"has_any_findings": true')]:
@@ -193,14 +202,12 @@ class CodexApprovalTests(unittest.TestCase):
                 data["comments"][1]["body"] = data["comments"][1]["body"].replace(old, new)
                 self.assert_withheld(execute(data))
 
-    def test_receipts_must_be_present_unedited_and_match_head(self):
-        for kind in ["missing", "edited", "wrong_sha", "untrusted", "wrong_resolution"]:
+    def test_receipts_must_be_present_and_match_head(self):
+        for kind in ["missing", "wrong_sha", "untrusted", "wrong_resolution"]:
             with self.subTest(kind=kind):
                 data = fixture()
                 if kind == "missing":
                     data["comments"].pop()
-                elif kind == "edited":
-                    data["comments"][-1]["updated_at"] = "2026-10-31T11:32:32Z"
                 elif kind == "wrong_sha":
                     data["comments"][-1]["body"] = data["comments"][-1]["body"].replace(HEAD[:10], "b" * 10)
                 elif kind == "untrusted":
@@ -209,12 +216,12 @@ class CodexApprovalTests(unittest.TestCase):
                     data["resolved_sha"] = "b" * 40
                 self.assert_withheld(execute(data))
 
-    def test_newer_or_overlapping_requests_are_withheld(self):
+    def test_new_requests_do_not_invalidate_same_head_reviews(self):
         for created in ["2026-10-31T11:30:20Z", "2026-10-31T11:32:34Z"]:
             with self.subTest(created=created):
                 data = fixture()
                 data["comments"].append(comment(5, "@codex review\nRetry", created, trusted=False))
-                self.assert_withheld(execute(data))
+                self.assert_approved(execute(data))
 
     def test_requested_changes_are_not_overridden(self):
         data = fixture()
@@ -227,8 +234,8 @@ class CodexApprovalTests(unittest.TestCase):
                 data["comments"][1]["body"] += "\nUpdated explanation"
         self.assert_withheld(execute(fixture(), before_read=change), "evidence changed")
 
-    def test_head_base_and_open_state_are_rechecked_before_approval(self):
-        for field in ["head", "base", "state"]:
+    def test_head_and_open_state_are_rechecked_before_approval(self):
+        for field in ["head", "state"]:
             with self.subTest(field=field):
                 def change(endpoint, count, data):
                     if endpoint == f"{ROOT}/pulls/200" and count == 2:
@@ -237,6 +244,12 @@ class CodexApprovalTests(unittest.TestCase):
                         else:
                             data["pr"][field]["sha"] = "c" * 40
                 self.assert_withheld(execute(fixture(), before_read=change), "before approval")
+
+    def test_base_update_does_not_invalidate_same_head_review(self):
+        def change(endpoint, count, data):
+            if endpoint == f"{ROOT}/pulls/200" and count == 2:
+                data["pr"]["base"]["sha"] = "c" * 40
+        self.assert_approved(execute(fixture(), before_read=change))
 
     def test_thumbs_up_is_rechecked_before_approval(self):
         def change(endpoint, count, data):
@@ -266,7 +279,7 @@ class CodexApprovalTests(unittest.TestCase):
         data = fixture()
         data["comments"][0]["body"] = "@codex review private-comment-text\n::error::injected"
         result = execute(data)
-        self.assert_withheld(result)
+        self.assert_approved(result)
         output = result["summary"] + result["stdout"] + result["stderr"]
         self.assertNotIn("private-comment-text", output)
         self.assertNotIn("::error::injected", output)
