@@ -1,4 +1,4 @@
-"""Exercise the workflow's approval script with an isolated GitHub API double."""
+"""Execute the actual inline script with isolated GitHub API responses."""
 
 import contextlib
 import copy
@@ -12,282 +12,262 @@ import textwrap
 import unittest
 from unittest.mock import patch
 
-
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github/workflows/approve-codex-review.yml"
-HEAD = "b1b939347652fcd3678578e28d0282c9a1f0e33d"
-ROOT = "repos/daiksudme/apex"
-BOT = {"login": "chatgpt-codex-connector[bot]", "id": 199175422, "type": "Bot"}
-APP = {"id": 1144995, "slug": "chatgpt-codex-connector"}
+WORKFLOW = Path(os.environ.get("APPROVAL_WORKFLOW_FIXTURE", Path(__file__).resolve().parents[2] / ".github/workflows/approve-codex-review.yml"))
+ROOT = "repos/owner/repo"
+BOT = "chatgpt-codex-connector[bot]"
+PREFIX = "<!-- codex-pull-request-review-summary -->"
 
 
-def comment(number, body, created, updated=None, trusted=True):
-    return {
-        "id": number,
-        "body": body,
-        "created_at": created,
-        "updated_at": updated or created,
-        "user": copy.deepcopy(BOT) if trusted else {"login": "daiksud", "id": 155234749},
-        "performed_via_github_app": copy.deepcopy(APP) if trusted else None,
-    }
+def summary(code="Completed", security="Completed", identifier=10):
+    # Observed Codex table: emoji/bold labels, status, time, commit, trigger.
+    body = (PREFIX + "\n## Codex Review Summary\n\n"
+            "| Review | Status | Commit | Review trigger |\n"
+            "| --- | --- | --- | --- |\n"
+            f'| 📝 **Code Review** | ✅ **{code}** <relative-time datetime="not-a-clock">done</relative-time> | `aaaaaaa` | Manual request |\n'
+            f'| 🔒 **Security Review** | ✅ **{security}** <relative-time datetime="not-a-clock">done</relative-time> | `aaaaaaa` | Manual request |\n')
+    return {"id": identifier, "body": body, "user": {"login": BOT}}
 
 
 def fixture():
-    state = {
-        "code_review": {"commit_sha": HEAD, "status": "completed", "has_any_findings": False, "has_unresolved_findings": False},
-        "security_review": {"commit_sha": HEAD, "status": "completed", "has_any_findings": None, "has_unresolved_findings": None},
-    }
-    metadata = {"headSha": HEAD, "repository": "daiksudme/apex", "pullRequestNumber": 200, "status": "completed", "mergeGateEnabled": False}
-    summary = "\n".join([
-        "<!-- codex-pull-request-review-summary -->",
-        f"<!-- codex-review-state:v1 {json.dumps(state)} -->",
-        f"<!-- codex-security-review:v1 {json.dumps(metadata)} -->",
-        f'| **Code Review** | **Completed** <relative-time datetime="2026-10-31T11:31:06.5Z">done</relative-time> | `{HEAD[:7]}` | Manual request |',
-        f'| **Security Review** | **Completed** <relative-time datetime="2026-10-31T11:32:31.5Z">done</relative-time> | `{HEAD[:7]}` | Manual request |',
-    ])
-    receipt = "<!-- codex-review-receipt:v1 -->\n\n{}\n\n**Reviewed commit:** `" + HEAD[:10] + "`\n"
-    return {
-        "pr": {"state": "open", "head": {"sha": HEAD}, "base": {"ref": "main", "sha": "a" * 40}},
-        "comments": [
-            comment(1, "@codex review", "2026-10-31T11:30:17Z", trusted=False),
-            comment(2, summary, "2026-10-31T11:30:33Z", "2026-10-31T11:32:33Z"),
-            comment(3, receipt.format("Codex Review: Didn't find any major issues."), "2026-10-31T11:31:06Z"),
-            comment(4, receipt.format("### 🛡️ Codex Security Review · _Automatically triggered_\n\nSecurity review completed. No security issues were found in this pull request."), "2026-10-31T11:32:31Z"),
-        ],
-        "timeline": [],
-        "reactions": [{"id": 10, "user": {**BOT, "type": "User"}, "content": "+1", "created_at": "2026-10-31T11:32:35Z"}],
-        "reviews": [],
-        "resolved_sha": HEAD,
-    }
+    return {"comments": [summary()], "reactions": [{"user": {"login": BOT, "type": "User"}, "content": "+1"}]}
 
 
-def execute(data, before_read=None, fail_api=False, with_summary=True):
-    """Run the actual entry point; intercept every external process, including sleep."""
-    workflow = WORKFLOW.read_text(encoding="utf-8")
-    source = textwrap.dedent(workflow.split("python3 - <<'PYTHON'\n", 1)[1].rsplit("\n          PYTHON", 1)[0])
-    writes, reads = [], {}
+def execute(data, mutate=None, failure=None, pagination=None, response=None, summary_file=True):
+    source = textwrap.dedent(WORKFLOW.read_text().split("python3 - <<'PYTHON'\n", 1)[1].rsplit("\n          PYTHON", 1)[0])
+    data = copy.deepcopy(data)
+    writes, reads, sleeps = [], {}, []
     stdout, stderr = io.StringIO(), io.StringIO()
 
     def process(args, **kwargs):
         if args == ["sleep", "30"]:
+            sleeps.append(30)
             return subprocess.CompletedProcess(args, 0)
         if args[:2] != ["gh", "api"]:
-            raise AssertionError(f"Unexpected external command: {args!r}")
-        if fail_api:
-            return subprocess.CompletedProcess(args, 1, "private API response", "secret credential")
-        if args[2:4] == ["--method", "POST"]:
+            raise AssertionError("Unexpected external command")
+        if args[2] == "--method":
+            # No locally selected HEAD or extra approval fields are submitted.
+            if args != ["gh", "api", "--method", "POST", f"{ROOT}/pulls/7/reviews", "-f", "event=APPROVE"]:
+                raise AssertionError("Unexpected write")
+            if failure == "post":
+                return subprocess.CompletedProcess(args, 1, "secret API body", "secret stderr")
             writes.append(args)
-            return subprocess.CompletedProcess(args, 0, json.dumps({"state": "APPROVED", "commit_id": HEAD}))
+            return subprocess.CompletedProcess(args, 0, json.dumps({"state": "APPROVED", "commit_id": "server-selected"} if response is None else response))
         endpoint = args[2].split("?", 1)[0]
+        if args[3:] != ["--paginate", "--slurp"]:
+            raise AssertionError("Collection must be paginated")
         reads[endpoint] = reads.get(endpoint, 0) + 1
-        if before_read:
-            before_read(endpoint, reads[endpoint], data)
-        responses = {
-            f"{ROOT}/pulls/200": data["pr"],
-            f"{ROOT}/issues/200/comments": data["comments"],
-            f"{ROOT}/issues/200/timeline": data["timeline"],
-            f"{ROOT}/issues/200/reactions": data["reactions"],
-            f"{ROOT}/pulls/200/reviews": data["reviews"],
-            f"{ROOT}/commits/{HEAD[:10]}": {"sha": data["resolved_sha"]},
-        }
-        value = responses[endpoint]
-        return subprocess.CompletedProcess(args, 0, json.dumps([value] if "--slurp" in args else value))
+        if mutate:
+            mutate(endpoint, reads[endpoint], data)
+        if failure == endpoint:
+            return subprocess.CompletedProcess(args, 1, "secret API body", "secret stderr")
+        if failure == "json":
+            return subprocess.CompletedProcess(args, 0, "secret non-JSON response")
+        values = {f"{ROOT}/issues/7/comments": data["comments"], f"{ROOT}/issues/7/reactions": data["reactions"]}
+        # Any PR, HEAD, base, receipts, timeline or review-history read fails here.
+        if endpoint not in values:
+            raise AssertionError("Unexpected extra eligibility read")
+        rows = values[endpoint]
+        result = [rows[:1], rows[1:]] if pagination is None else pagination
+        return subprocess.CompletedProcess(args, 0, json.dumps(result))
 
-    with tempfile.TemporaryDirectory() as directory:
-        summary_path = Path(directory) / "summary.md"
-        env = {"GITHUB_REPOSITORY": "daiksudme/apex", "PR_NUMBER": "200", "COMMENT_ID": "2"}
-        if with_summary:
-            env["GITHUB_STEP_SUMMARY"] = str(summary_path)
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "summary.md"
+        env = {"GITHUB_REPOSITORY": "owner/repo", "PR_NUMBER": "7", "GH_TOKEN": "dummy-test-token", "COMMENT_ID": "superseded-event"}
+        if summary_file:
+            env["GITHUB_STEP_SUMMARY"] = str(path)
         with patch.dict(os.environ, env, clear=True), patch("subprocess.run", side_effect=process), contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
             code = 0
             try:
                 exec(compile(source, str(WORKFLOW), "exec"), {"__name__": "__main__"})
             except SystemExit as error:
                 code = error.code
-        summary = summary_path.read_text(encoding="utf-8") if summary_path.exists() else ""
-    return {"code": code, "writes": writes, "stdout": stdout.getvalue(), "stderr": stderr.getvalue(), "summary": summary}
+        note = path.read_text() if path.exists() else ""
+    return {"code": code, "writes": writes, "reads": reads, "sleeps": sleeps, "output": stdout.getvalue() + stderr.getvalue(), "summary": note}
 
 
-class CodexApprovalTests(unittest.TestCase):
-    def assert_approved(self, result):
+class ApprovalWorkflowTests(unittest.TestCase):
+    def approved(self, result):
         self.assertEqual(result["code"], 0, result)
         self.assertEqual(len(result["writes"]), 1, result)
-        self.assertEqual(result["writes"][0], ["gh", "api", "--method", "POST", f"{ROOT}/pulls/200/reviews", "-f", "event=APPROVE", "-f", f"commit_id={HEAD}"])
-        self.assertIn("Approved", result["summary"])
-        self.assertIn(HEAD, result["summary"])
+        self.assertIn("Codex approval: Approved", result["output"])
 
-    def assert_withheld(self, result, reason=None):
+    def withheld(self, result):
         self.assertEqual(result["code"], 0, result)
         self.assertEqual(result["writes"], [], result)
-        self.assertIn("::warning title=Codex approval withheld::", result["stdout"])
-        self.assertIn("Withheld", result["summary"])
-        self.assertIn("No approval was submitted", result["summary"])
-        if reason:
-            self.assertIn(reason, result["summary"])
+        self.assertIn("Codex approval: Withheld", result["output"])
 
-    def test_plain_request_still_approves_current_commit(self):
-        self.assert_approved(execute(fixture()))
+    def test_two_conditions_approve(self):
+        self.approved(execute(fixture()))
 
-    def test_first_line_command_allows_explanation(self):
-        for body in ["@codex review\n\nPlease review the current HEAD and the tests.", "  @CODEX REVIEW \r\nPlease review the current HEAD."]:
-            with self.subTest(body=body):
+    def test_each_review_must_be_completed(self):
+        for label in ("code", "security"):
+            for status in ("Running", "Failed", "Queued", "Incomplete", ""):
+                with self.subTest(label=label, status=status):
+                    data = fixture()
+                    data["comments"] = [summary(**{label: status})]
+                    self.withheld(execute(data))
+
+    def test_missing_summary_or_review_row_withholds(self):
+        for mode in ("summary", "code", "security"):
+            with self.subTest(mode=mode):
                 data = fixture()
-                data["comments"][0]["body"] = body
-                self.assert_approved(execute(data))
+                if mode == "summary":
+                    data["comments"] = []
+                else:
+                    label = "Code Review" if mode == "code" else "Security Review"
+                    data["comments"][0]["body"] = "\n".join(line for line in data["comments"][0]["body"].splitlines() if f"**{label}**" not in line)
+                self.withheld(execute(data))
 
-    def test_request_wording_does_not_invalidate_completed_reviews(self):
-        for body in ["", "\n@codex review", "Please check this.\n@codex review", "> @codex review", "```\n@codex review\n```", "@codex review please", "@codex security review"]:
-            with self.subTest(body=body):
+    def test_only_codex_summary_and_reaction_count(self):
+        for target in ("comments", "reactions"):
+            with self.subTest(target=target):
                 data = fixture()
-                data["comments"][0]["body"] = body
-                self.assert_approved(execute(data))
+                data[target][0]["user"]["login"] = "other-user"
+                self.withheld(execute(data))
 
-    def test_edited_request_is_accepted(self):
+    def test_setup_notice_cannot_replace_summary(self):
         data = fixture()
-        data["comments"][0].update(body="@codex review\nExplanation", updated_at="2026-10-31T11:30:18Z")
-        self.assert_approved(execute(data))
+        data["comments"][0]["body"] = "To use Codex here, create an environment."
+        self.withheld(execute(data))
 
-    def test_explanation_is_accepted_after_base_retarget(self):
-        data = fixture()
-        data["comments"][0]["body"] = "@codex review\nPlease review after retargeting."
-        data["timeline"] = [{"id": 20, "event": "base_ref_changed", "created_at": "2026-10-31T11:30:00Z"}]
-        self.assert_approved(execute(data))
-
-    def test_base_retarget_after_request_is_accepted_without_freshness_proof(self):
-        data = fixture()
-        data["comments"][0]["body"] = "@codex review\nExplanation"
-        data["timeline"] = [{"id": 20, "event": "base_ref_changed", "created_at": "2026-10-31T11:30:20Z"}]
-        self.assert_approved(execute(data))
-
-    def test_edited_request_after_retarget_is_accepted(self):
-        data = fixture()
-        data["comments"][0]["updated_at"] = "2026-10-31T11:30:18Z"
-        data["timeline"] = [{"id": 20, "event": "base_ref_changed", "created_at": "2026-10-31T11:30:00Z"}]
-        self.assert_approved(execute(data))
-
-    def test_old_same_second_and_missing_reaction_times_are_accepted(self):
-        for at in [None, "invalid", "2026-10-31T11:32:32Z", "2026-10-31T11:32:33Z"]:
-            with self.subTest(at=at):
+    def test_missing_or_other_reaction_withholds_after_bounded_wait(self):
+        for content in (None, "eyes", "heart"):
+            with self.subTest(content=content):
                 data = fixture()
-                data["reactions"][0]["created_at"] = at
-                self.assert_approved(execute(data))
+                data["reactions"] = [] if content is None else [{"user": {"login": BOT}, "content": content}]
+                result = execute(data)
+                self.withheld(result)
+                self.assertEqual(result["sleeps"], [30] * 6)
 
-    def test_missing_thumbs_up_is_withheld(self):
+    def test_late_thumbs_up_uses_same_two_conditions(self):
+        def change(endpoint, count, data):
+            if endpoint.endswith("/reactions") and count == 1:
+                data["reactions"] = []
+            elif endpoint.endswith("/reactions"):
+                data["reactions"] = fixture()["reactions"]
+        result = execute(fixture(), mutate=change)
+        self.approved(result)
+        self.assertEqual(result["sleeps"], [30])
+
+    def test_incomplete_review_during_wait_withholds(self):
         data = fixture()
         data["reactions"] = []
-        self.assert_withheld(execute(data), "no Codex thumbs-up")
-
-    def test_missing_evidence_times_are_accepted(self):
-        data = fixture()
-        for item in data["comments"]:
-            item.pop("created_at", None)
-            item.pop("updated_at", None)
-        self.assert_approved(execute(data))
-
-    def test_untrusted_summary_identity_or_app_is_withheld(self):
-        for field in ["user", "performed_via_github_app"]:
-            with self.subTest(field=field):
-                data = fixture()
-                data["comments"][1][field]["id"] = 1
-                self.assert_withheld(execute(data), "no trusted review summary")
-
-    def test_untrusted_thumbs_up_is_withheld(self):
-        data = fixture()
-        data["reactions"][0]["user"]["id"] = 1
-        self.assert_withheld(execute(data), "no Codex thumbs-up")
-
-    def test_incomplete_reviews_wrong_head_and_findings_are_withheld(self):
-        for old, new in [('"status": "completed"', '"status": "in_progress"'), (HEAD, "b" * 40), ('"has_unresolved_findings": false', '"has_unresolved_findings": true'), ('"has_any_findings": null', '"has_any_findings": true')]:
-            with self.subTest(new=new):
-                data = fixture()
-                data["comments"][1]["body"] = data["comments"][1]["body"].replace(old, new)
-                self.assert_withheld(execute(data))
-
-    def test_receipts_must_be_present_and_match_head(self):
-        for kind in ["missing", "wrong_sha", "untrusted", "wrong_resolution"]:
-            with self.subTest(kind=kind):
-                data = fixture()
-                if kind == "missing":
-                    data["comments"].pop()
-                elif kind == "wrong_sha":
-                    data["comments"][-1]["body"] = data["comments"][-1]["body"].replace(HEAD[:10], "b" * 10)
-                elif kind == "untrusted":
-                    data["comments"][-1]["performed_via_github_app"]["id"] = 1
-                else:
-                    data["resolved_sha"] = "b" * 40
-                self.assert_withheld(execute(data))
-
-    def test_new_requests_do_not_invalidate_same_head_reviews(self):
-        for created in ["2026-10-31T11:30:20Z", "2026-10-31T11:32:34Z"]:
-            with self.subTest(created=created):
-                data = fixture()
-                data["comments"].append(comment(5, "@codex review\nRetry", created, trusted=False))
-                self.assert_approved(execute(data))
-
-    def test_requested_changes_are_not_overridden(self):
-        data = fixture()
-        data["reviews"] = [{"user": {"login": "reviewer"}, "state": "CHANGES_REQUESTED", "commit_id": HEAD}]
-        self.assert_withheld(execute(data), "requested changes")
-
-    def test_evidence_is_rechecked_before_approval(self):
         def change(endpoint, count, data):
             if endpoint.endswith("/comments") and count == 2:
-                data["comments"][1]["body"] += "\nUpdated explanation"
-        self.assert_withheld(execute(fixture(), before_read=change), "evidence changed")
+                data["comments"] = [summary(security="Running")]
+        self.withheld(execute(data, mutate=change))
 
-    def test_head_and_open_state_are_rechecked_before_approval(self):
-        for field in ["head", "state"]:
-            with self.subTest(field=field):
+    def test_latest_codex_summary_is_used_across_pages(self):
+        for latest, expected in [(summary(identifier=20), True), (summary(security="Running", identifier=20), False)]:
+            with self.subTest(expected=expected):
+                data = fixture()
+                data["comments"] = [latest, summary(identifier=5)]
+                (self.approved if expected else self.withheld)(execute(data))
+
+    def test_non_codex_newer_summary_is_ignored(self):
+        data = fixture()
+        other = summary(security="Running", identifier=30)
+        other["user"]["login"] = "other-user"
+        data["comments"].append(other)
+        self.approved(execute(data))
+
+    def test_completed_elsewhere_does_not_replace_status(self):
+        data = fixture()
+        data["comments"] = [summary(code="Running")]
+        data["comments"][0]["body"] += "\nCode Review is **Completed** in another paragraph.\n"
+        self.withheld(execute(data))
+
+    def test_ambiguous_duplicate_review_row_withholds(self):
+        data = fixture()
+        data["comments"][0]["body"] += "| **Code Review** | **Running** | other |\n"
+        self.withheld(execute(data))
+
+    def test_head_findings_timestamps_requests_and_receipts_are_not_gates(self):
+        data = fixture()
+        item = data["comments"][0]
+        item.update(created_at="invalid", updated_at="older", performed_via_github_app=None)
+        item["body"] = item["body"].replace("`aaaaaaa`", "`another-commit`").replace("Manual request", "Automatic review")
+        item["body"] += '\n<!-- codex-review-state:v1 {"code_review":{"status":"running","commit_sha":"old","has_unresolved_findings":true},"security_review":{"status":"failed","has_any_findings":true}} -->\n'
+        item["body"] += "\n### Security findings\nAn accepted risk remains.\n"
+        data["comments"] += [{"id": 20, "body": "@codex review", "user": {"login": "author"}}, {"id": 21, "body": "A receipt reports findings", "user": {"login": BOT}}]
+        data["reactions"][0]["created_at"] = "old-or-invalid"
+        data["reviews"] = [{"state": "CHANGES_REQUESTED"}, {"state": "APPROVED"}]
+        data["pr"] = {"head": {"sha": "different"}, "base": {"ref": "retargeted"}}
+        self.approved(execute(data))
+
+    def test_structured_metadata_is_not_required(self):
+        data = fixture()
+        data["comments"][0]["body"] += "\n<!-- codex-review-state:v1 malformed -->\n"
+        self.approved(execute(data))
+
+    def test_extra_api_identity_metadata_is_not_required(self):
+        data = fixture()
+        data["comments"][0]["user"].update(id=0, type="User")
+        data["comments"][0]["performed_via_github_app"] = {"id": 0}
+        self.approved(execute(data))
+
+    def test_duplicate_reaction_rows_still_mean_thumbs_up_exists(self):
+        data = fixture()
+        data["reactions"] *= 2
+        self.approved(execute(data))
+
+    def test_unrelated_summary_edit_during_wait_does_not_add_a_gate(self):
+        def change(endpoint, count, data):
+            if endpoint.endswith("/reactions") and count == 1:
+                data["reactions"] = []
+            elif endpoint.endswith("/comments") and count == 2:
+                data["comments"][0]["body"] += "\nAdvisory text updated.\n"
+                data["reactions"] = fixture()["reactions"]
+        self.approved(execute(fixture(), mutate=change))
+
+    def test_same_two_conditions_are_read_again_before_submission(self):
+        for mode in ("running", "removed"):
+            with self.subTest(mode=mode):
                 def change(endpoint, count, data):
-                    if endpoint == f"{ROOT}/pulls/200" and count == 2:
-                        if field == "state":
-                            data["pr"][field] = "closed"
-                        else:
-                            data["pr"][field]["sha"] = "c" * 40
-                self.assert_withheld(execute(fixture(), before_read=change), "before approval")
+                    if mode == "running" and endpoint.endswith("/comments") and count == 2:
+                        data["comments"] = [summary(code="Running")]
+                    if mode == "removed" and endpoint.endswith("/reactions") and count == 2:
+                        data["reactions"] = []
+                self.withheld(execute(fixture(), mutate=change))
 
-    def test_base_update_does_not_invalidate_same_head_review(self):
+    def test_different_completed_summary_or_reaction_identity_still_approves(self):
         def change(endpoint, count, data):
-            if endpoint == f"{ROOT}/pulls/200" and count == 2:
-                data["pr"]["base"]["sha"] = "c" * 40
-        self.assert_approved(execute(fixture(), before_read=change))
-
-    def test_thumbs_up_is_rechecked_before_approval(self):
-        def change(endpoint, count, data):
+            if endpoint.endswith("/comments") and count == 2:
+                data["comments"] = [summary(identifier=999)]
+                data["comments"][0]["body"] += "\nChanged advisory text.\n"
             if endpoint.endswith("/reactions") and count == 2:
-                data["reactions"][0]["id"] = 11
-        self.assert_withheld(execute(fixture(), before_read=change), "thumbs-up changed")
+                data["reactions"][0]["id"] = 999
+        self.approved(execute(fixture(), mutate=change))
 
-    def test_existing_approval_is_reported_without_another_write(self):
-        data = fixture()
-        data["reviews"] = [{"user": {"login": "github-actions[bot]"}, "state": "APPROVED", "commit_id": HEAD}]
-        result = execute(data)
-        self.assertEqual(result["code"], 0, result)
-        self.assertEqual(result["writes"], [])
-        self.assertIn("Already approved", result["summary"])
-        self.assertIn(HEAD, result["summary"])
+    def test_api_failures_and_invalid_json_fail_without_leaking(self):
+        for failure in (f"{ROOT}/issues/7/comments", f"{ROOT}/issues/7/reactions", "json", "post"):
+            with self.subTest(failure=failure):
+                result = execute(fixture(), failure=failure)
+                self.assertEqual(result["code"], 1, result)
+                self.assertNotIn("secret", result["output"])
+                self.assertNotIn("dummy-test-token", result["output"])
+                self.assertNotIn("Codex approval: Approved", result["output"])
 
-    def test_api_failure_remains_a_failure_without_leaking_data(self):
-        result = execute(fixture(), fail_api=True)
-        self.assertEqual(result["code"], 1, result)
-        self.assertEqual(result["writes"], [])
-        self.assertIn("Failed", result["summary"])
-        output = result["summary"] + result["stdout"] + result["stderr"]
-        self.assertNotIn("private API response", output)
-        self.assertNotIn("secret credential", output)
+    def test_malformed_pagination_fails(self):
+        for value in ({}, [None], [[None]]):
+            with self.subTest(value=value):
+                result = execute(fixture(), pagination=value)
+                self.assertEqual(result["code"], 1, result)
+                self.assertEqual(result["writes"], [])
 
-    def test_untrusted_request_text_is_not_echoed(self):
-        data = fixture()
-        data["comments"][0]["body"] = "@codex review private-comment-text\n::error::injected"
-        result = execute(data)
-        self.assert_approved(result)
-        output = result["summary"] + result["stdout"] + result["stderr"]
-        self.assertNotIn("private-comment-text", output)
-        self.assertNotIn("::error::injected", output)
+    def test_unconfirmed_approval_is_reported_as_failure(self):
+        for response in ({"state": "PENDING"}, []):
+            with self.subTest(response=response):
+                result = execute(fixture(), response=response)
+                self.assertEqual(result["code"], 1, result)
+                self.assertNotIn("Codex approval: Approved", result["output"])
 
-    def test_missing_summary_environment_does_not_change_approval(self):
-        result = execute(fixture(), with_summary=False)
-        self.assertEqual(result["code"], 0, result)
-        self.assertEqual(len(result["writes"]), 1, result)
+    def test_missing_step_summary_file_does_not_change_decision(self):
+        self.approved(execute(fixture(), summary_file=False))
+
+    def test_repeated_events_do_not_consult_review_history(self):
+        self.approved(execute(fixture()))
+        self.approved(execute(fixture()))
 
 
 if __name__ == "__main__":

@@ -136,15 +136,20 @@ Workers Buildsは [bun.lock](bun.lock) から依存関係のインストーラ�
 
 ### Codexの承認自動化とRulesetsの責務
 
-[承認ワークフロー](.github/workflows/approve-codex-review.yml)は、現在のHEADに対する信頼できるCodexのコード・セキュリティレビュー結果を解釈し、そのコミットを承認します。BotとAppの識別、両レビューの完了、指摘の状態、Codexの👍を確認します。セキュリティの指摘フラグがnullの場合は、同じHEADに対する種類別の最新の信頼できるreceiptで問題なしを確認し、省略SHAを完全なSHAに解決します。送信直前にも証跡、👍、PRがopenであること、HEADを再確認し、正確な `commit_id` で承認を送信します。
+[承認ワークフロー](.github/workflows/approve-codex-review.yml)の承認条件は次の2点だけです。
 
-同じHEADの完了結果と既存の👍は再利用します。新しい依頼、コメントの時刻、👍の古さだけを理由に同じコードの再レビューを要求しません。時刻に基づく編集・証跡再利用の検知や、どのbaseとの差分がレビューされたかの証明は行いません。workflowの成功には承認保留も含まれ、承認されたことやマージ可能であることと同義ではありません。
+1. PRにCodexの👍リアクションがある。
+2. 最新のCodex Review SummaryでCode ReviewとSecurity Reviewが両方ともCompletedである。
 
-古い承認の失効、必須チェック、baseとの同期などのマージ条件はRulesetsが担います。2026-11-01に読み取った [default Ruleset](https://github.com/daiksudme/apex/rules/23758136) は `main` に対して有効で、`dismiss_stale_reviews_on_push: true`、`pass` に対する `strict_required_status_checks_policy: true`、`preview` へのDeployment成功を要求していました。実際のマージ判断では有効なルールとbypass権限を再確認してください。この変更では設定を変更しません。
+GitHub APIの `user.login` でCodexを識別し、コメントIDが最も大きいSummaryのMarkdown表から2つの状態欄を読みます。HEAD、base、時刻、receipt、指摘フラグ、過去の依頼や変更要求を追加の承認条件にしません。構造化メタデータも参照しません。送信直前にも同じ2条件だけを再確認し、コメント本文やリアクションIDが変わったこと自体は追加条件にしません。承認APIには `commit_id` を指定せず、対象コミットの選択をGitHubに任せます。
 
-GitHubの[承認失効条件](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-pull-request-reviews-before-merging)は、承認済みの差分の変化やmerge baseから導入された変更に基づきます。「HEADのSHAが変われば常に失効する」「mainが進めば必ず失効する」とは断定しません。[strictな必須チェック](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging)はマージ前のbase最新化を要求しますが、Codexが特定のbaseをレビューした証明ではありません。workflowはbase履歴を追跡せず、承認を取り消したりマージしたりしません。必須CI、Preview、レビューなどの保護は独立した条件です。
+Summaryの作成・編集と `ci-pr` の完了を契機に評価し、CIの成否自体は承認条件にしません。Summaryの更新より👍が遅れる場合に備え、同じ2条件を30秒ごとに最大6回再確認します。この待機時間はレビュー完了の証拠ではありません。👍の追加自体は起動イベントではないため、待機終了後は別のSummary更新または `ci-pr` 完了イベントが必要です。PR単位で実行を直列化しますが、条件を満たすイベントが重なると承認を複数回送信することがあります。過去の承認を判定には使いません。
 
-承認workflowは信頼できるSummaryの作成・編集と `ci-pr` の成功完了を契機に実行します。👍がない場合の待機は初回確認後30秒ごとに最大6回です。待機の上限では承認を保留し、APIの失敗では実行を失敗にします。待機はレビュー完了の証拠ではありません。
+古い承認の失効、必須チェック、baseとの同期、スレッド解決などのマージ条件はRulesetsが担います。2026-11-01に読み取った [default Ruleset](https://github.com/daiksudme/apex/rules/23758136) は `main` に対して有効で、承認1件、スレッド解決、`dismiss_stale_reviews_on_push: true`、`pass` に対するstrictな必須チェック、`preview` へのDeployment成功を要求していました。実際のマージ判断では有効なルールとbypass権限を再確認してください。この変更では設定を変更しません。
+
+GitHubの[承認失効条件](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-pull-request-reviews-before-merging)は、承認済み差分やmerge baseから導入された変更に関係します。HEADのSHA変更やmainの更新だけで必ず失効するという意味ではありません。[strictな必須チェック](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging)によるbase同期も、Codexが特定の差分をレビューした証明ではありません。
+
+完了済みSummaryと既存の👍が残っていれば、コードやbaseが変わった後でも新しい承認を発行できます。承認は現在のコミット・差分がレビュー済みである証明ではなく、マージ可能性とも別です。workflowは承認を取り消したりマージしたりしません。APIの失敗は実行の失敗として報告し、条件が足りない場合は承認を保留します。
 
 ### PRの検証
 
