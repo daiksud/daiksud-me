@@ -14,6 +14,8 @@ Astroで構築した静的サイトです。ビルドの出力先は `dist/` で
 
 リポジトリは [daiksud/daiksud-me](https://github.com/daiksud/daiksud-me) です。GitHubの所有者・リポジトリ名とは独立して、Cloudflare Worker名は `daiksud-me`、ビルドCheck名は `Workers Builds: daiksud-me`、PreviewのURLは `*-daiksud-me.daiksud-a1f.workers.dev` を使用します。
 
+開発時のPR・コミット・ラベルと設定適用の手順は[開発規約](CONTRIBUTING.md)を参照してください。
+
 ### ホーム画面の設計用語
 
 [tmuxのペイン](https://github.com/tmux/tmux/wiki/Getting-Started#sessions-windows-and-panes)と[herdrのペイン](https://herdr.dev/docs/concepts/#pane)にならい、ホーム画面で区切られたコンテンツ領域を**ペイン**と呼びます。画面の説明、設計、CSS、テストでこの用語を統一して使います。

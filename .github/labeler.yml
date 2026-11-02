@@ -1,0 +1,5 @@
+# Synchronize documentation only when every changed file is documentation.
+documentation:
+  - changed-files:
+      - any-glob-to-all-files:
+          - "{README.md,CONTRIBUTING.md,AGENTS.md,docs/**,.agents/skills/**/SKILL.md,.github/pull_request_template.md}"

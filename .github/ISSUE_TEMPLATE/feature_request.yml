@@ -1,0 +1,17 @@
+name: 機能・改善提案
+description: サイトの機能や改善を提案します。
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 解決したい問題
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: 完了条件
+      description: どのような利用者の動作・結果が得られれば解決したと判断できますか。
+    validations:
+      required: true
