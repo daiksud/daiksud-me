@@ -12,7 +12,7 @@ Astroで構築した静的サイトです。ビルドの出力先は `dist/` で
 
 本番のオリジンは <https://daiksud.me> で、Astroの `site` 設定に集約しています。DNSとCloudflareのカスタムドメイン設定は、この設定とは別に管理します。
 
-リポジトリは [daiksud/daiksud-me](https://github.com/daiksud/daiksud-me) です。GitHubの所有者・リポジトリ名とは独立して、Cloudflare Worker名は `apex`、ビルドCheck名は `Workers Builds: apex`、PreviewのURLは `*-apex.daiksud-a1f.workers.dev` を使用します。
+リポジトリは [daiksud/daiksud-me](https://github.com/daiksud/daiksud-me) です。GitHubの所有者・リポジトリ名とは独立して、Cloudflare Worker名は `daiksud-me`、ビルドCheck名は `Workers Builds: daiksud-me`、PreviewのURLは `*-daiksud-me.daiksud-a1f.workers.dev` を使用します。
 
 ### ホーム画面の設計用語
 
@@ -171,7 +171,7 @@ Readyになると、現在のソースの検証が成功した状態で、ユー
 
 ### Cloudflareデプロイの記録
 
-Cloudflare Workers Buildsの `Workers Builds: apex` Checkが成功すると、[同期ワークフロー](.github/workflows/record-cloudflare-deployment.yml)が、そのCheckのSHAに対してGitHub Deploymentと `success` Statusを記録します。Check Suiteのブランチが `main` なら `production`、それ以外の空でないブランチ名なら `preview` として記録します。実際のデプロイはCloudflare Workers Buildsが行います。
+Cloudflare Workers Buildsの `Workers Builds: daiksud-me` Checkが成功すると、[同期ワークフロー](.github/workflows/record-cloudflare-deployment.yml)が、そのCheckのSHAに対してGitHub Deploymentと `success` Statusを記録します。Check Suiteのブランチが `main` なら `production`、それ以外の空でないブランチ名なら `preview` として記録します。実際のデプロイはCloudflare Workers Buildsが行います。
 
 `production` のDeploymentリンクにはカスタムドメインの `https://daiksud.me/` を使い、`preview` のリンクにはブランチごとのWorkers URLを使います。
 

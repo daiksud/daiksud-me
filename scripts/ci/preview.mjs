@@ -39,7 +39,7 @@ export async function findPreview(read, source) {
   for (const check of checks.toSorted((a, b) => (b.id ?? 0) - (a.id ?? 0))) {
     if (check.head_sha !== source.sha || check.app?.id !== 85455
       || check.app?.slug !== 'cloudflare-workers-and-pages'
-      || check.name !== 'Workers Builds: apex' || !check.check_suite?.id) continue;
+      || check.name !== 'Workers Builds: daiksud-me' || !check.check_suite?.id) continue;
     const suite = await read(`check-suites/${check.check_suite.id}`);
     if (suite?.repository?.full_name !== 'daiksud/daiksud-me'
       || suite.head_sha !== source.sha || suite.head_branch !== source.branch) continue;
@@ -71,7 +71,7 @@ export function matchPreview({ check, suite, deployment, status }, { sha, branch
     && check?.head_sha === sha
     && check?.app?.id === 85455
     && check?.app?.slug === 'cloudflare-workers-and-pages'
-    && check?.name === 'Workers Builds: apex'
+    && check?.name === 'Workers Builds: daiksud-me'
     && check?.status === 'completed' && check?.conclusion === 'success'
     && suite?.repository?.full_name === 'daiksud/daiksud-me'
     && suite?.head_sha === sha && suite?.head_branch === branch

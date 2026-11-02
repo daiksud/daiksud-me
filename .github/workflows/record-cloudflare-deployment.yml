@@ -15,7 +15,7 @@ jobs:
       github.event.repository.full_name == 'daiksud/daiksud-me' &&
       github.event.check_run.app.id == 85455 &&
       github.event.check_run.app.slug == 'cloudflare-workers-and-pages' &&
-      github.event.check_run.name == 'Workers Builds: apex' &&
+      github.event.check_run.name == 'Workers Builds: daiksud-me' &&
       github.event.check_run.status == 'completed' &&
       github.event.check_run.conclusion == 'success'
     runs-on: ubuntu-latest
