@@ -136,21 +136,24 @@ Workers Buildsは [bun.lock](bun.lock) から依存関係のインストーラ�
 
 ### Codexの承認自動化とRulesetsの責務
 
-[承認ワークフロー](.github/workflows/approve-codex-review.yml)は、[gh-settings #553](https://github.com/daiksud/gh-settings/pull/553)と同じ次の条件で承認します。
+[承認ワークフロー](.github/workflows/approve-codex-review.yml)は、[gh-settings #554](https://github.com/daiksud/gh-settings/pull/554)と同じ次の条件で承認します。
 
 1. PRにCodexの👍リアクションがある。
 2. 最新のCodex Review SummaryでCode ReviewとSecurity Reviewが両方ともCompletedである。
 3. 両レビューの完全SHAが現在のPR HEADと一致する。
+4. 同じPR・同じ完全SHAに、`github-actions[bot]` の `APPROVED` または `DISMISSED` 履歴がない。
 
 GitHub APIの `user.login` でCodexを識別し、コメントIDが最も大きいSummaryのMarkdown表から2つの状態欄を読みます。👍と完了状態が揃った後、PR HEADを1回取得し、`codex-review-state:v1` の両レビューの完全な `commit_sha` と照合します。SHA情報の欠落・不正・重複や不一致があれば承認を保留します。確認したSHAを `commit_id` に指定して承認し、応答の対象SHAも確認します。base、時刻、receipt、指摘フラグ、過去の依頼や変更要求は追加条件にしません。
 
-Summaryの作成・編集と `ci-pr` の完了を契機に評価し、CIの成否自体は承認条件にしません。Summaryの更新より👍が遅れる場合に備え、30秒ごとに最大6回再試行します。各試行ではSummaryと👍を各1回読み、両方が揃った場合だけHEADを読みます。送信直前にSummaryや👍を再取得する処理はありません。この待機時間はレビュー完了の証拠ではありません。👍の追加自体は起動イベントではないため、待機終了後は別のSummary更新または `ci-pr` 完了イベントが必要です。PR単位で実行を直列化しますが、条件を満たすイベントが重なると承認を複数回送信することがあります。過去の承認を判定には使いません。
+Summaryの作成・編集と `ci-pr` の完了を契機に評価し、CIの成否自体は承認条件にしません。Summaryの更新より👍が遅れる場合に備え、30秒ごとに最大6回再試行します。各試行ではSummaryと👍を各1回読み、両方が揃った場合だけHEADを読みます。送信直前にSummaryや👍を再取得する処理はありません。この待機時間はレビュー完了の証拠ではありません。👍の追加自体は起動イベントではないため、待機終了後は別のSummary更新または `ci-pr` 完了イベントが必要です。PR単位で実行を直列化します。
+
+送信前にこのPRのレビュー履歴を全ページ取得し、同じSHAに対するGitHub Actionsの承認済み・dismiss済み履歴があれば再承認しません。既存レビューに本文マーカーは不要です。同じHEADでCodexを再レビューしても、dismissされた承認は復活させません。別HEAD・別PR・別レビュアーの履歴は抑止対象にならず、履歴取得の失敗時は承認しません。履歴確認とPOSTは別操作であり、ほかの書き込みに対する原子的な予約ではありません。
 
 古い承認の失効、必須チェック、baseとの同期、スレッド解決などのマージ条件はRulesetsが担います。2026-11-01に読み取った [default Ruleset](https://github.com/daiksudme/apex/rules/23758136) は `main` に対して有効で、承認1件、スレッド解決、`dismiss_stale_reviews_on_push: true`、`pass` に対するstrictな必須チェック、`preview` へのDeployment成功を要求していました。実際のマージ判断では有効なルールとbypass権限を再確認してください。この変更では設定を変更しません。
 
 GitHubの[承認失効条件](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-pull-request-reviews-before-merging)は、承認済み差分やmerge baseから導入された変更に関係します。HEADのSHA変更やmainの更新だけで必ず失効するという意味ではありません。[strictな必須チェック](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging)によるbase同期も、Codexが特定の差分をレビューした証明ではありません。
 
-完了済みの同一HEADのSummaryと既存の👍は、baseが変わっても再利用できます。そのため承認はどの差分がレビューされたかの証明にはならず、マージ可能性とも別です。HEAD確認と承認POSTは別の操作ですが、その間にpushされても指定した `commit_id` は変わりません。現在HEADに対する原子的な保証や、取得後のSummary・👍変更の検知は行いません。workflowは承認を取り消したりマージしたりしません。APIの失敗は実行の失敗として報告し、条件が足りない場合は承認を保留します。
+このHEADに自動承認履歴がない場合に限り、完了済みの同一HEADのSummaryと既存の👍はbaseが変わっても再利用できます。そのため承認はどの差分がレビューされたかの証明にはならず、マージ可能性とも別です。HEAD確認と承認POSTは別の操作ですが、その間にpushされても指定した `commit_id` は変わりません。現在HEADに対する原子的な保証や、取得後のSummary・👍変更の検知は行いません。workflowは承認を取り消したりマージしたりしません。APIの失敗は実行の失敗として報告し、条件が足りない場合は承認を保留します。
 
 ### PRの検証
 
