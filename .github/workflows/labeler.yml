@@ -1,0 +1,26 @@
+name: Labeler
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  labeler:
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    steps:
+      # Read the trusted base branch's rules. Never check out or execute PR
+      # code in this write-capable pull_request_target workflow.
+      - name: Synchronize the documentation label
+        uses: actions/labeler@b7a88044754812b108a54feec878dd5c328bba59 # v7.0.0 + selective sync fix (#957)
+        with:
+          sync-labels: true
+          dot: true
