@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "apex",
+      "name": "daiksud-me",
       "dependencies": {
         "@astrojs/markdown-satteri": "0.4.1",
         "@astrojs/rss": "4.0.19",

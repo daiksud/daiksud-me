@@ -7,11 +7,11 @@ import { previewUrl } from '../../scripts/ci/preview-url.mjs';
 
 const sha = 'a'.repeat(40);
 const branch = 'ci/161-pr-stages';
-const url = 'https://ci-161-pr-stages-apex.daiksud-a1f.workers.dev/';
+const url = 'https://ci-161-pr-stages-daiksud-me.daiksud-a1f.workers.dev/';
 const logUrl = 'https://dash.cloudflare.com/builds/fixture';
 const evidence = {
-  check: { head_sha: sha, app: { id: 85455, slug: 'cloudflare-workers-and-pages' }, name: 'Workers Builds: apex', status: 'completed', conclusion: 'success', details_url: logUrl },
-  suite: { head_sha: sha, head_branch: branch, repository: { full_name: 'daiksudme/apex' } },
+  check: { head_sha: sha, app: { id: 85455, slug: 'cloudflare-workers-and-pages' }, name: 'Workers Builds: daiksud-me', status: 'completed', conclusion: 'success', details_url: logUrl },
+  suite: { head_sha: sha, head_branch: branch, repository: { full_name: 'daiksud/daiksud-me' } },
   deployment: { id: 123, sha, environment: 'preview', production_environment: false },
   status: { state: 'success', log_url: logUrl, environment_url: url },
 };
@@ -22,7 +22,7 @@ test('returns the recorded URL only from matching provider, suite, deployment an
 
 test('matches the provider alias for punctuation and uppercase branch names', () => {
   const sourceBranch = 'Fix/API_v2...---';
-  const expected = 'https://fix-api-v2-apex.daiksud-a1f.workers.dev/';
+  const expected = 'https://fix-api-v2-daiksud-me.daiksud-a1f.workers.dev/';
   const record = structuredClone(evidence);
   record.suite.head_branch = sourceBranch;
   record.status.environment_url = expected;
@@ -31,9 +31,9 @@ test('matches the provider alias for punctuation and uppercase branch names', ()
 
 test('preserves the provider DNS boundary and hashes the original long branch', () => {
   assert.equal(new URL(previewUrl('a'.repeat(60))).hostname.split('.')[0].length, 63);
-  assert.equal(previewUrl('a'.repeat(58)), `https://${'a'.repeat(58)}-apex.daiksud-a1f.workers.dev/`);
-  assert.equal(previewUrl('a'.repeat(59)), `https://${'a'.repeat(53)}-111b-apex.daiksud-a1f.workers.dev/`);
-  assert.equal(previewUrl('a'.repeat(60)), `https://${'a'.repeat(53)}-11ee-apex.daiksud-a1f.workers.dev/`);
+  assert.equal(previewUrl('a'.repeat(52)), `https://${'a'.repeat(52)}-daiksud-me.daiksud-a1f.workers.dev/`);
+  assert.equal(previewUrl('a'.repeat(53)), `https://${'a'.repeat(47)}-abe3-daiksud-me.daiksud-a1f.workers.dev/`);
+  assert.equal(previewUrl('a'.repeat(60)), `https://${'a'.repeat(47)}-11ee-daiksud-me.daiksud-a1f.workers.dev/`);
   assert.notEqual(previewUrl('A'.repeat(60)), previewUrl('a'.repeat(60)));
 });
 
@@ -44,7 +44,7 @@ test('rejects branch aliases without a leading letter instead of inventing a URL
 test('shared URL CLI prints the normalized URL and fails for invalid aliases', async () => {
   const execute = promisify(execFile);
   const result = await execute(process.execPath, ['scripts/ci/preview-url.mjs', 'fix/api_v2']);
-  assert.equal(result.stdout.trim(), 'https://fix-api-v2-apex.daiksud-a1f.workers.dev/');
+  assert.equal(result.stdout.trim(), 'https://fix-api-v2-daiksud-me.daiksud-a1f.workers.dev/');
   await assert.rejects(execute(process.execPath, ['scripts/ci/preview-url.mjs', '123-feature']), (error) => {
     assert.equal(error.code, 1);
     assert.match(error.stderr, /cannot produce a Cloudflare Preview alias/);
@@ -67,6 +67,7 @@ for (const [name, change] of [
   ['provider conclusion', (value) => { value.check.conclusion = 'failure'; }],
   ['provider SHA', (value) => { value.check.head_sha = 'b'.repeat(40); }],
   ['suite repository', (value) => { value.suite.repository.full_name = 'other/repo'; }],
+  ['former repository name', (value) => { value.suite.repository.full_name = 'daiksudme/apex'; }],
   ['suite branch', (value) => { value.suite.head_branch = 'other'; }],
   ['suite SHA', (value) => { value.suite.head_sha = 'b'.repeat(40); }],
   ['deployment SHA', (value) => { value.deployment.sha = 'b'.repeat(40); }],
@@ -153,7 +154,11 @@ for (const [name, path, pages, expected] of [
   ['single suite', 'check-suites/1', [{ id: 1, head_sha: sha }], { id: 1, head_sha: sha }],
 ]) {
   test(`decodes paginated ${name}`, async () => {
-    const execute = async () => ({ stdout: JSON.stringify(pages) });
+    const execute = async (command, args) => {
+      assert.equal(command, 'gh');
+      assert.deepEqual(args, ['api', `repos/daiksud/daiksud-me/${path}`, '--paginate', '--slurp']);
+      return { stdout: JSON.stringify(pages) };
+    };
     assert.deepEqual(await readGithub(path, execute), expected);
   });
 }
