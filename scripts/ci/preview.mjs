@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import { previewUrl } from './preview-url.mjs';
 
 export async function readGithub(path, execute = promisify(execFile)) {
-  const { stdout } = await execute('gh', ['api', `repos/daiksudme/apex/${path}`, '--paginate', '--slurp'], {
+  const { stdout } = await execute('gh', ['api', `repos/daiksud/daiksud-me/${path}`, '--paginate', '--slurp'], {
     timeout: 30_000, maxBuffer: 8 * 1024 * 1024,
   });
   const pages = JSON.parse(stdout);
@@ -41,7 +41,7 @@ export async function findPreview(read, source) {
       || check.app?.slug !== 'cloudflare-workers-and-pages'
       || check.name !== 'Workers Builds: apex' || !check.check_suite?.id) continue;
     const suite = await read(`check-suites/${check.check_suite.id}`);
-    if (suite?.repository?.full_name !== 'daiksudme/apex'
+    if (suite?.repository?.full_name !== 'daiksud/daiksud-me'
       || suite.head_sha !== source.sha || suite.head_branch !== source.branch) continue;
     if (check.status !== 'completed') return null;
     if (check.conclusion !== 'success') throw new Error(`Preview provider failed: ${check.conclusion}`);
@@ -73,7 +73,7 @@ export function matchPreview({ check, suite, deployment, status }, { sha, branch
     && check?.app?.slug === 'cloudflare-workers-and-pages'
     && check?.name === 'Workers Builds: apex'
     && check?.status === 'completed' && check?.conclusion === 'success'
-    && suite?.repository?.full_name === 'daiksudme/apex'
+    && suite?.repository?.full_name === 'daiksud/daiksud-me'
     && suite?.head_sha === sha && suite?.head_branch === branch
     && deployment?.sha === sha && deployment?.environment === 'preview'
     && deployment?.production_environment === false

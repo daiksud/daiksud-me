@@ -89,7 +89,7 @@ try {
       }
       const commits = page.getByRole('region', { name: '最近のコミット', exact: true });
       for (const name of ['GitHub', 'GitHubで変更履歴を見る']) {
-        await checkExternalLink(commits.getByRole('link', { name, exact: true }), 'https://github.com/daiksudme/apex/commits/main/');
+        await checkExternalLink(commits.getByRole('link', { name, exact: true }), 'https://github.com/daiksud/daiksud-me/commits/main/');
       }
       const toc = page.getByRole('navigation', { name: 'このページの内容', exact: true });
       const ls = page.getByRole('region', { name: 'ようこそ', exact: true }).getByText('ls', { exact: true });

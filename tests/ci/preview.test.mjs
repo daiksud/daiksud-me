@@ -11,7 +11,7 @@ const url = 'https://ci-161-pr-stages-apex.daiksud-a1f.workers.dev/';
 const logUrl = 'https://dash.cloudflare.com/builds/fixture';
 const evidence = {
   check: { head_sha: sha, app: { id: 85455, slug: 'cloudflare-workers-and-pages' }, name: 'Workers Builds: apex', status: 'completed', conclusion: 'success', details_url: logUrl },
-  suite: { head_sha: sha, head_branch: branch, repository: { full_name: 'daiksudme/apex' } },
+  suite: { head_sha: sha, head_branch: branch, repository: { full_name: 'daiksud/daiksud-me' } },
   deployment: { id: 123, sha, environment: 'preview', production_environment: false },
   status: { state: 'success', log_url: logUrl, environment_url: url },
 };
@@ -67,6 +67,7 @@ for (const [name, change] of [
   ['provider conclusion', (value) => { value.check.conclusion = 'failure'; }],
   ['provider SHA', (value) => { value.check.head_sha = 'b'.repeat(40); }],
   ['suite repository', (value) => { value.suite.repository.full_name = 'other/repo'; }],
+  ['former repository name', (value) => { value.suite.repository.full_name = 'daiksudme/apex'; }],
   ['suite branch', (value) => { value.suite.head_branch = 'other'; }],
   ['suite SHA', (value) => { value.suite.head_sha = 'b'.repeat(40); }],
   ['deployment SHA', (value) => { value.deployment.sha = 'b'.repeat(40); }],
@@ -153,7 +154,11 @@ for (const [name, path, pages, expected] of [
   ['single suite', 'check-suites/1', [{ id: 1, head_sha: sha }], { id: 1, head_sha: sha }],
 ]) {
   test(`decodes paginated ${name}`, async () => {
-    const execute = async () => ({ stdout: JSON.stringify(pages) });
+    const execute = async (command, args) => {
+      assert.equal(command, 'gh');
+      assert.deepEqual(args, ['api', `repos/daiksud/daiksud-me/${path}`, '--paginate', '--slurp']);
+      return { stdout: JSON.stringify(pages) };
+    };
     assert.deepEqual(await readGithub(path, execute), expected);
   });
 }

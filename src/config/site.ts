@@ -2,8 +2,8 @@ export const site = {
   name: 'daiksud.me',
   description: '技術の実験や個人プロジェクト、そこから学んだこと・考えたことを綴るブログです。',
   tagline: 'つくる。学ぶ。書く。繰り返す。',
-  repositoryUrl: 'https://github.com/daiksudme/apex',
-  commitsUrl: 'https://github.com/daiksudme/apex/commits/main/',
+  repositoryUrl: 'https://github.com/daiksud/daiksud-me',
+  commitsUrl: 'https://github.com/daiksud/daiksud-me/commits/main/',
 } as const;
 
 export const profile = {

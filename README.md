@@ -1,16 +1,18 @@
 ---
 type: Guide
-title: apexサイトのビルド
+title: daiksud.meサイトのビルド
 description: Astro製の静的サイトの概要と、チェック・テスト・ビルドの手順。
 ---
 
-## apex
+## daiksud.me
 
 Astroで構築した静的サイトです。ビルドの出力先は `dist/` です。Cloudflareへのデプロイ設定は [wrangler.jsonc](wrangler.jsonc) で管理します。
 
 サイトとドキュメントの主言語は日本語です。画面の案内、読み上げ用ラベル、ページ情報を日本語で揃え、ブランド名、コマンド、URL、設定キー、タグのslugは元の表記を維持します。
 
 本番のオリジンは <https://daiksud.me> で、Astroの `site` 設定に集約しています。DNSとCloudflareのカスタムドメイン設定は、この設定とは別に管理します。
+
+リポジトリは [daiksud/daiksud-me](https://github.com/daiksud/daiksud-me) です。GitHubの所有者・リポジトリ名とは独立して、Cloudflare Worker名は `apex`、ビルドCheck名は `Workers Builds: apex`、PreviewのURLは `*-apex.daiksud-a1f.workers.dev` を使用します。
 
 ### ホーム画面の設計用語
 
@@ -149,7 +151,7 @@ Summaryの作成・編集と `ci-pr` の完了を契機に評価し、CIの成�
 
 送信前にこのPRのレビュー履歴を全ページ取得し、同じSHAに対するGitHub Actionsの承認済み・dismiss済み履歴があれば再承認しません。既存レビューに本文マーカーは不要です。同じHEADでCodexを再レビューしても、dismissされた承認は復活させません。別HEAD・別PR・別レビュアーの履歴は抑止対象にならず、履歴取得の失敗時は承認しません。履歴確認とPOSTは別操作であり、ほかの書き込みに対する原子的な予約ではありません。
 
-古い承認の失効、必須チェック、baseとの同期、スレッド解決などのマージ条件はRulesetsが担います。2026-11-01に読み取った [default Ruleset](https://github.com/daiksudme/apex/rules/23758136) は `main` に対して有効で、承認1件、スレッド解決、`dismiss_stale_reviews_on_push: true`、`pass` に対するstrictな必須チェック、`preview` へのDeployment成功を要求していました。実際のマージ判断では有効なルールとbypass権限を再確認してください。この変更では設定を変更しません。
+古い承認の失効、必須チェック、baseとの同期、スレッド解決などのマージ条件はRulesetsが担います。2026-11-01に読み取った [default Ruleset](https://github.com/daiksud/daiksud-me/rules/23758136) は `main` に対して有効で、承認1件、スレッド解決、`dismiss_stale_reviews_on_push: true`、`pass` に対するstrictな必須チェック、`preview` へのDeployment成功を要求していました。実際のマージ判断では有効なルールとbypass権限を再確認してください。この変更では設定を変更しません。
 
 GitHubの[承認失効条件](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches#require-pull-request-reviews-before-merging)は、承認済み差分やmerge baseから導入された変更に関係します。HEADのSHA変更やmainの更新だけで必ず失効するという意味ではありません。[strictな必須チェック](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets#require-status-checks-to-pass-before-merging)によるbase同期も、Codexが特定の差分をレビューした証明ではありません。
 
@@ -170,6 +172,8 @@ Readyになると、現在のソースの検証が成功した状態で、ユー
 ### Cloudflareデプロイの記録
 
 Cloudflare Workers Buildsの `Workers Builds: apex` Checkが成功すると、[同期ワークフロー](.github/workflows/record-cloudflare-deployment.yml)が、そのCheckのSHAに対してGitHub Deploymentと `success` Statusを記録します。Check Suiteのブランチが `main` なら `production`、それ以外の空でないブランチ名なら `preview` として記録します。実際のデプロイはCloudflare Workers Buildsが行います。
+
+`production` のDeploymentリンクにはカスタムドメインの `https://daiksud.me/` を使い、`preview` のリンクにはブランチごとのWorkers URLを使います。
 
 デプロイの記録処理とPRのPreview照合処理は、[共通のエイリアスヘルパー](scripts/ci/preview-url.mjs)を使い、[Workers SDKのブランチエイリアス規則](https://github.com/cloudflare/workers-sdk/blob/08d694cc8ed69ffe264405a342f1ae0f233d7792/packages/deploy-helpers/src/deploy/helpers/preview-alias.ts)に従います。記号と大文字・小文字を正規化し、長いエイリアスはプロバイダーと同じ方法で元のブランチ名から生成したハッシュを末尾に付けて短縮します。英字から始まる有効なエイリアスを作れないブランチでは、明確なエラーで失敗します。記録処理では、信頼済みのデフォルトブランチ上のワークフローコミットからこのヘルパーだけを読み込みます。依存関係のインストールやPRの候補コードのチェックアウトは行いません。
 
