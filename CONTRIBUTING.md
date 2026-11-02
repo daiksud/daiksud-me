@@ -12,7 +12,7 @@ PRタイトルとコミットはConventional Commitsに従います。例は `fi
 
 [settings.yml](.github/settings.yml)で標準10ラベル（accessibility、bug、documentation、duplicate、enhancement、good first issue、help wanted、invalid、question、wontfix）をgh-settingsで管理します。既存ラベルはこのリポジトリの実IDで指定します。未宣言の `blog` やDependabot等のラベルと既存の割当は管理外として保持します。ラベルをコミット種別の代わりには使いません。
 
-Issue Formsは不具合に `bug`、機能・改善提案に `enhancement` を付けます。Labelerは変更ファイルがすべて開発文書に一致するときだけ `documentation` を同期します（`sync-labels: true`）。サイトの記事 `src/content/posts/` は公開コンテンツなので対象に含めません。Labelerは他のラベルを操作せず、PRコードをcheckout・実行しません。
+Issue Formsは不具合に `bug`、機能・改善提案に `enhancement` を付けます。Labelerは変更ファイルがすべて開発文書に一致するときだけ `documentation` を同期します（`sync-labels: true`）。サイトの記事 `src/content/posts/` は公開コンテンツなので対象に含めません。Labelerは他のラベルを操作せず、PRコードをcheckout・実行しません。無関係なラベルを同時に外した際の復元を避けるため、[上流の個別操作への修正](https://github.com/actions/labeler/commit/b7a88044754812b108a54feec878dd5c328bba59)にSHA固定しています（v7.0.0後の未タグ修正）。
 
 ## ラベル設定の適用
 
