@@ -1,44 +1,45 @@
-# Only listed labels are managed. Preserve unlisted labels and assignments.
-schemaVersion: 1
-settings:
+version: daiksud/gh-settings@v0
+repository:
+  # Manage only the selected existing labels by repository-local ID.
+  # All other labels, Rulesets and settings remain unmanaged in this phase.
   labels:
     - name: "accessibility"
-      color: "f143ab"
+      color: "#f143ab"
       description: "Barrier affecting people with disabilities"
       id: 12935523873
     - id: 12270648230
       name: "bug"
-      color: "d73a4a"
+      color: "#d73a4a"
       description: "Something isn't working"
     - id: 12270648236
       name: "documentation"
-      color: "0075ca"
+      color: "#0075ca"
       description: "Improvements or additions to documentation"
     - id: 12270648242
       name: "duplicate"
-      color: "cfd3d7"
+      color: "#cfd3d7"
       description: "This issue or pull request already exists"
     - id: 12270648249
       name: "enhancement"
-      color: "a2eeef"
+      color: "#a2eeef"
       description: "New feature or request"
     - id: 12270648261
       name: "good first issue"
-      color: "7057ff"
+      color: "#7057ff"
       description: "Good for newcomers"
     - id: 12270648277
       name: "help wanted"
-      color: "008672"
+      color: "#008672"
       description: "Extra attention is needed"
     - id: 12270648293
       name: "invalid"
-      color: "e4e669"
+      color: "#e4e669"
       description: "This doesn't seem right"
     - id: 12270648313
       name: "question"
-      color: "d876e3"
+      color: "#d876e3"
       description: "Further information is requested"
     - id: 12270648333
       name: "wontfix"
-      color: "ffffff"
+      color: "#ffffff"
       description: "This will not be worked on"

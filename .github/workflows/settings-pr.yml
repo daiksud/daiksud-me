@@ -1,0 +1,17 @@
+name: settings-pr
+on:
+  pull_request:
+    branches: [main]
+permissions: {}
+jobs:
+  settings-pr:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: daiksud/gh-settings@ff76e02965049ed08124281c59b8829d0301d25b # v0.29.0
+        with:
+          command: validate

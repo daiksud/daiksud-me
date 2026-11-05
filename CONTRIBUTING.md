@@ -16,7 +16,7 @@ Issue Formsは不具合に `bug`、機能・改善提案に `enhancement` を付
 
 ## ラベル設定の適用
 
-この導入では自動適用workflowや新しい認証情報を作らず、既存の管理権限を持つGitHub CLIの認証を使って手動で適用します。導入・実API確認に用いたCLIは `daiksud/gh-settings v0.26.0` です。このファイルは同版の `schemaVersion: 1` 形式で、宣言はラベルだけに限定しています。将来CLIを更新するときはスキーマ互換性を先に確認してください。
+この導入では自動適用workflowや新しい認証情報を作らず、既存の管理権限を持つGitHub CLIの認証を使って手動で適用します。設定ファイルはgh-settings v0.29.0の `version: daiksud/gh-settings@v0` 形式です。管理対象は既存の10ラベルだけに限定します。PRではSHA固定の `settings-pr` ワークフローが同バージョンで `validate` を実行します。`validate` はGitHub上の実設定を読み取らず、差分確認や適用もしません。
 
 対象checkoutのoriginが `https://github.com/daiksud/daiksud-me.git` であることと、設定の差分・対象ラベルのID・既存権限を確認してから実行します。
 
