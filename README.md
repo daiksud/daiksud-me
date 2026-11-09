@@ -31,7 +31,7 @@ Astroで構築した静的サイトです。ビルドの出力先は `dist/` で
 
 共通の外側のコンテナは `pane`、内部の共通要素は `pane-heading` / `pane-label` / `pane-link` / `pane-footnote` です。ホーム画面は6つのペインで構成し、すべて `src/components/Pane.astro` を使います。サイドバーペインとフッターペインは `aside` / `footer` を使い、サイト共通レイアウトのGrid Areaである `sidebar` / `footer` に配置します。残りの4つは `section` を使い、`dashboard` 直下のGrid Itemとして配置します。ウェルカムペインは独立したペイン見出しを置かず、コマンド行とページの `h1` から始めます。ほかの3つには共通のペイン見出しを表示します。サイト全体のヘッダーは上部バーであり、ペインとは区別します。
 
-外側のコンテナはホームと一覧ページで最大1440px、記事ページで最大1600pxです。基本の左右余白は24px、ペイン間の間隔は16pxです。画面幅1280px以上では左サイドバーを240pxにし、それより狭い画面では共通ナビゲーションを本文の上に移します。
+ホームは画面幅に合わせて広げます。ヘッダーとフッターは全ページで画面の左右端まで表示します。画面幅1280px以上では左端に幅240pxのサイドバーを置き、メイン領域はその右側の幅を使います。メイン領域と画面右端の余白は12px、ペイン間の間隔は16pxです。それより狭い画面では共通ナビゲーションを本文の上に移し、メイン領域の左右に12pxの余白を設けます。
 
 ホームではウェルカムペインと記事ペインをこの順にメイン領域の全幅で表示します。その下に自己紹介とコミットを配置し、画面幅1000px以上では横に並べ、それより狭い画面では縦に並べます。各ペインは内容に応じた高さにし、下端を揃えるために引き伸ばしません。
 
@@ -102,38 +102,40 @@ catalog:
 
 ### テストとビルド
 
-依存関係のインストール、Astroの開発・ビルド、テストにはBun `1.4.4` を使います。バージョンは [mise.toml](mise.toml) と [package.json](package.json) で固定し、依存関係は [bun.lock](bun.lock) で固定しています。AstroのコマンドではBunランタイムを明示的に選択します。型チェックには引き続き `astro check` を使い、`.astro` ファイルも対象にします。
+依存関係のインストール、Astroの開発・ビルド、テストにはNode.jsとpnpmを使います。Node.jsのバージョンは [.node-version](.node-version) だけで指定します。[mise.toml](mise.toml) の `idiomatic_version_file_enable_tools = ["node", "pnpm"]` により、miseはNode.jsをこのファイルから、pnpmをpackage.jsonから読み取ります。GitHub Actionsのsetup-nodeは `node-version-file: .node-version`、Cloudflare Workers Buildsは標準のバージョンファイル検出で同じ指定を使います。mise.tomlの `tools.node` やpackage.jsonの `engines.node` にバージョンを重複指定しないでください。miseの[Node.jsバージョンファイルの仕様](https://mise.jdx.dev/lang/node.html#version-files)を参照してください。
 
-Wrangler用にNode.js `26.10.0` も使用します。Cloudflare Workers Buildsが読み取る [.node-version](.node-version) は、`mise.toml` で固定したNode.jsのバージョンと揃えてください。WranglerはNode.jsのshebangに従って実行し、デプロイコマンドにBunランタイムを強制しないでください。デプロイ記録用ワークフローはこれとは別に、GitHubランナーにプリインストールされたNode.jsを使って、信頼済みで外部依存のないURLヘルパーを実行します。
+pnpmのバージョンは [package.json](package.json) の `packageManager` だけで指定し、依存関係は [pnpm-lock.yaml](pnpm-lock.yaml) で固定します。mise.tomlの `tools.pnpm` やActionsの `version` にpnpmのバージョンを重複指定しないでください。Actionsはpnpm/action-setupでpnpmを用意してからsetup-nodeの `cache: pnpm` を使います。pnpm/action-setup側のキャッシュは有効にしません。Corepackや独自のバージョン抽出スクリプトは不要です。
+
+[pnpm-workspace.yaml](pnpm-workspace.yaml) の `saveExact: true` により、依存関係を追加するときも完全一致で保存します。`allowBuilds` は必要なesbuild・workerdのバージョンだけにインストールスクリプトを許可し、fseventsは実行しません。型チェックには `astro check` を使い、`.astro` ファイルも対象にします。WranglerもNode.jsで実行します。デプロイ記録用ワークフローは、信頼済みのチェックアウトにある `.node-version` からNode.jsを用意し、外部依存のないURLヘルパーを実行します。
 
 ```sh
 mise trust mise.toml
 mise install
-mise exec -- bun install --frozen-lockfile
-mise exec -- bun run check
-mise exec -- bun run build
-mise exec -- bun run test:unit
+mise exec -- pnpm install --frozen-lockfile
+mise exec -- pnpm run check
+mise exec -- pnpm run build
+mise exec -- pnpm run test:unit
 ```
 
-ローカルのAstro開発サーバーは `mise exec -- bun run dev` で起動します。このプロジェクトのスクリプトを実行するときは `bun run check` と `bun run test` を使ってください。Bun組み込みの `check` と `test` は、それぞれ異なる動作をします。
+ローカルのAstro開発サーバーは `mise exec -- pnpm run dev` で起動します。コミットメッセージは、package.jsonの開発依存にあるcommitlintを `mise exec -- pnpm run commitlint` で実行して検証できます。
 
 テストは、入力と観測可能な結果を通じて公開インターフェースの契約を守ります。単体テストでは日付、タイトル、記事の並び順、コンテンツに基づくタグを検証します。フィクスチャを使う結合テストでは、有効なコンテンツをビルドし、タグの重複、古い記事にある未定義タグ、ルートの衝突に対するビルド時の診断を検証します。そのブラウザ検証では、隔離したフィクスチャコンテンツを使い、Markdownの読みやすさ、メタデータ、記事・タグの並び順、ナビゲーションを確認します。ソースの文面、YAMLの構造、生のHTML/CSS、クラス、生成された識別子、内部の呼び出し順序はテストで固定しません。受入テストの実行処理、ブラウザのアサーション、スモークチェック自体を対象にしたテストは設けません。
 
 ### ブラウザでの受入テスト
 
-読者向けのシナリオは [`docs/features`](docs/features) に日本語で記載します。執筆者向けのタグ定義と不正な参照のルールは [`docs/behavior/tags.feature.md`](docs/behavior/tags.feature.md) に記載します。`bun run test` はBunのテストランナーで、公開インターフェースの単体テストとフィクスチャを使う結合テストを実行します。`test:unit` は公開インターフェースに対する高速なテスト、`test:integration` は [`tests/content.build.test.mjs`](tests/content.build.test.mjs) と、その中で実際にブラウザを使うフィクスチャ検証を実行します。`test`、`test:integration`、受入テストを実行する前にChromiumをインストールしてください。`test:ci` は別のテストで、プロバイダーとデプロイの情報を入力し、返される結果からPreviewの選択・拒否を検証します。
+読者向けのシナリオは [`docs/features`](docs/features) に日本語で記載します。執筆者向けのタグ定義と不正な参照のルールは [`docs/behavior/tags.feature.md`](docs/behavior/tags.feature.md) に記載します。`pnpm run test` はVitestで、公開インターフェースの単体テストとフィクスチャを使う結合テストを実行します。`test:unit` は公開インターフェースに対する高速なテスト、`test:integration` は [`tests/content.build.test.mjs`](tests/content.build.test.mjs) と、その中で実際にブラウザを使うフィクスチャ検証を実行します。`test`、`test:integration`、受入テストを実行する前にChromiumをインストールしてください。`test:ci` は別のテストで、プロバイダーとデプロイの情報を入力し、返される結果からPreviewの選択・拒否を検証します。
 
 Playwrightのバージョンはロックファイルで固定しています。受入テストの前に、対応するChromium shellをインストールしてください。
 
 ```sh
-mise exec -- bun run test:ci
-mise exec -- bun run --bun playwright install --only-shell chromium
-mise exec -- bun run test
-mise exec -- bun run test:acceptance
-mise exec -- bun run test:acceptance "$PREVIEW_URL"
+mise exec -- pnpm run test:ci
+mise exec -- pnpm exec playwright install --only-shell chromium
+mise exec -- pnpm run test
+mise exec -- pnpm run test:acceptance
+mise exec -- pnpm run test:acceptance "$PREVIEW_URL"
 ```
 
-Linuxでブラウザに必要なシステム依存関係がない場合は、Playwrightの `install --with-deps --only-shell chromium` を使います。受入テストのコマンドは検証前にローカルの `dist` をビルドし、フィクスチャを使う結合テストと、画面幅1440・1280・1279・1000・999・390ピクセルでのローカルの読者操作を実行します。デプロイ記録と一致する `PREVIEW_URL` を指定すると、デプロイ済みPreviewに対しても同じ操作を検証します。PRのCIではこのURLの指定が必須です。mainへのpush時の受入テストではローカルビルドを使います。
+Linuxでブラウザに必要なシステム依存関係がない場合は、Playwrightの `install --with-deps --only-shell chromium` を使います。受入テストのコマンドは検証前にローカルの `dist` をビルドし、フィクスチャを使う結合テストと、画面幅1920・1440・1280・1279・1000・999・390ピクセルでのローカルの読者操作を実行します。デプロイ記録と一致する `PREVIEW_URL` を指定すると、デプロイ済みPreviewに対しても同じ操作を検証します。PRのCIではこのURLの指定が必須です。mainへのpush時の受入テストではローカルビルドを使います。
 
 受入テストは1回だけ実行し、実行エラーや期待値との不一致があればそのまま失敗にします。コマンドログは `test-results/acceptance` 以下に保存します。ブラウザ検証が失敗した場合は、対応するローカルまたはPreviewのディレクトリにスクリーンショットとトレースを保存します。フィクスチャコンテンツの診断には `fixtures-populated` と `fixtures-empty`、サイトの操作シナリオには `local` と `preview` の各ディレクトリを使います。レイアウトの寸法を調べるヘルパーは読者の操作シナリオから呼び出し、専用のサーバーやブラウザコマンドは設けません。フォーカスと選択状態の見え方は、基準画像を使わず、その時点で描画した状態どうしを比較します。[受入シナリオ](docs/features/acceptance.feature.md)を参照してください。
 
@@ -141,9 +143,9 @@ Linuxでブラウザに必要なシステム依存関係がない場合は、Pla
 
 ### Cloudflare Workers Buildsの設定
 
-Workerの **Settings → Build** で、ビルドコマンドを `bun run build` に設定します。本番デプロイとPreviewの既存コマンド、およびWranglerの動作は維持します。これらのコマンドはNode.jsでWranglerを実行します。以前pnpmのビルドコマンドを設定していた場合は、Bunへの移行時に更新が必要です。
+Workerの **Settings → Build** で、build commandを `pnpm run build` に設定します。deploy commandは本番・Previewそれぞれの既存のWranglerサブコマンドとオプションを保ち、`pnpm exec wrangler ...` で実行する形に揃えます。これらはCloudflare側の外部設定なので、リポジトリのファイルを変更しても更新されません。移行前に、実際のbuild/deploy commandを確認してください。
 
-Workers Buildsは [bun.lock](bun.lock) から依存関係のインストーラーを選び、[package.json](package.json) の `packageManager` からBunのバージョンを選びます。ビルドコマンドはCloudflare側の外部設定なので、リポジトリのファイルを変更しても更新されません。移行時には、ビルド設定と実際のPreviewビルドログの両方を確認してください。Cloudflareの[ビルド設定](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)と[ビルドイメージ・バージョンの選択](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)を参照してください。
+Workers Buildsは [pnpm-lock.yaml](pnpm-lock.yaml) からpnpmを選び、package.jsonの `packageManager` からpnpmのバージョンを選びます。Node.jsは `.node-version` を読み取ります。Cloudflare側の `NODE_VERSION`・`PNPM_VERSION` と、依存インストールを省略する `SKIP_DEPENDENCY_INSTALL` の設定も確認してください。Node.jsの上書きや古いインストール・デプロイコマンドが残ると、ローカル・CIと異なる環境になったり、Preview・本番のビルドが失敗したりする可能性があります。既定のCorepack設定ではpnpmの `packageManager` は `PNPM_VERSION` より優先されますが、移行時には外部設定と実際のビルドログで、使用されたNode.js・pnpm・各コマンドを確認してください。Cloudflareの[ビルド設定](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)と[ビルドイメージ・バージョンの選択](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)を参照してください。
 
 ### Codexの承認自動化とRulesetsの責務
 

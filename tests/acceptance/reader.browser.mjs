@@ -21,7 +21,8 @@ async function checkExternalLink(link, href) {
 }
 const browser = await chromium.launch();
 try {
-  for (const width of empty ? [1440] : fixtures ? [390] : [1440, 1280, 1279, 1000, 999, 390]) {
+  for (const width of empty ? [1440] : fixtures ? [390] : [1920, 1440, 1280, 1279, 1000, 999, 390]) {
+    console.log(`Reader viewport ${width} started: ${base}`);
     const context = await browser.newContext({ viewport: { width, height: 1200 } });
     await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();
@@ -40,6 +41,12 @@ try {
     const main = page.getByRole('main');
     const checkSharedNavigation = async () => {
       await checkFeedDiscovery(page);
+      const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      for (const role of ['banner', 'contentinfo']) {
+        const box = await page.getByRole(role).boundingBox();
+        assert.ok(Math.abs(box.x) <= 1 && Math.abs(box.x + box.width - viewportWidth) <= 1,
+          `NAV-01 ${role} spans the viewport at ${width}px`);
+      }
       assert.equal(await navigation.getByRole('link').count(), 4, 'NAV-01 exactly four site pages');
       for (const [name, href] of [['ホーム', '/'], ['記事一覧', '/posts'], ['タグ一覧', '/tags'], ['プロフィール', '/profile']]) {
         assert.equal(await navigation.getByRole('link', { name, exact: true }).getAttribute('href'), href, 'NAV-01 shared navigation');
@@ -180,6 +187,7 @@ try {
       throw error;
     } finally {
       await context.close();
+      console.log(`Reader viewport ${width} closed: ${base}`);
     }
   }
   console.log(empty ? 'Empty content acceptance passed' : fixtures ? 'Fixture content acceptance passed'

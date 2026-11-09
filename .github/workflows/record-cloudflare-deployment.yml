@@ -56,8 +56,16 @@ jobs:
         with:
           ref: ${{ github.sha }}
           persist-credentials: false
-          sparse-checkout: scripts/ci/preview-url.mjs
+          sparse-checkout: |
+            scripts/ci/preview-url.mjs
+            .node-version
           sparse-checkout-cone-mode: false
+      - name: Install Node.js
+        if: steps.deployment.outcome == 'success'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
       - name: Build preview URL
         id: preview_url
         if: steps.deployment.outcome == 'success'

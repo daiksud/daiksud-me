@@ -3,7 +3,7 @@ import { execFile, execFileSync, spawnSync } from 'node:child_process';
 import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'bun:test';
+import { afterAll, describe, expect, it } from 'vitest';
 import { promisify } from 'node:util';
 import { chromium } from 'playwright';
 import { parseFeed } from './acceptance/rss.browser.mjs';
@@ -390,7 +390,12 @@ it('TOC-04 keeps long outlines readable within mobile and desktop viewports', as
         expect(tocBox.x + tocBox.width).toBeLessThanOrEqual(articleBox.x + articleBox.width);
       }
       if (width === 1920) {
-        expect(await page.getByRole('banner').evaluate((header) => header.getBoundingClientRect().width)).toBeLessThanOrEqual(1600);
+        const header = await page.getByRole('banner').evaluate((element) => {
+          const { left, right } = element.getBoundingClientRect();
+          return { left, right, viewportWidth: document.documentElement.clientWidth };
+        });
+        expect(Math.abs(header.left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(header.right - header.viewportWidth)).toBeLessThanOrEqual(1);
       }
       await toc.getByRole('link').last().click();
       expect(await page.locator(':target').textContent()).toBe('Additional section 24');

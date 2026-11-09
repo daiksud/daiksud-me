@@ -3,21 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "bun@1.4.4",
-  "engines": {
-    "bun": "1.4.4",
-    "node": "26.10.0"
-  },
   "scripts": {
-    "dev": "bun run --bun astro dev",
-    "check": "bun run --bun astro check",
-    "build": "bun run --bun astro build",
-    "test": "bun test ./src ./tests/content.build.test.mjs",
-    "test:ci": "bun test ./tests/ci/preview.test.mjs && python3 -B -m unittest discover -s tests/ci -p 'test_*.py'",
-    "test:smoke": "bun scripts/ci/smoke.mjs",
-    "test:unit": "bun test ./src",
-    "test:integration": "bun test ./tests/content.build.test.mjs",
-    "test:acceptance": "bun run build && bun scripts/ci/acceptance.mjs"
+    "dev": "astro dev",
+    "check": "astro check",
+    "build": "astro build",
+    "test": "vitest run src tests/content.build.test.mjs",
+    "test:ci": "node --test ./tests/ci/preview.test.mjs && python3 -B -m unittest discover -s tests/ci -p 'test_*.py'",
+    "test:smoke": "node scripts/ci/smoke.mjs",
+    "test:unit": "vitest run src",
+    "test:integration": "vitest run tests/content.build.test.mjs",
+    "test:acceptance": "pnpm run build && node scripts/ci/acceptance.mjs",
+    "commitlint": "commitlint --strict"
   },
   "dependencies": {
     "@astrojs/markdown-satteri": "0.4.1",
@@ -27,10 +23,13 @@
   },
   "devDependencies": {
     "@astrojs/check": "0.9.10",
-    "@types/bun": "1.4.4",
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
+    "@types/node": "26.6.6",
     "playwright": "1.63.0",
     "typescript": "6.0.3",
+    "vitest": "5.1.0",
     "wrangler": "4.136.3"
   },
-  "trustedDependencies": ["esbuild", "workerd"]
+  "packageManager": "pnpm@12.18.0"
 }
