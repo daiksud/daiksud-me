@@ -21,7 +21,7 @@ async function checkExternalLink(link, href) {
 }
 const browser = await chromium.launch();
 try {
-  for (const width of empty ? [1440] : fixtures ? [390] : [1440, 1100, 961, 960, 390]) {
+  for (const width of empty ? [1440] : fixtures ? [390] : [1440, 1280, 1279, 1000, 999, 390]) {
     const context = await browser.newContext({ viewport: { width, height: 1200 } });
     await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();
@@ -84,8 +84,8 @@ try {
       await page.mouse.move(0, 0);
       const inactivePosts = await postsNavigation.screenshot({ animations: 'disabled' });
       const about = page.getByRole('region', { name: '自己紹介', exact: true });
-      for (const domain of ['github.com', 'x.com', 'zenn.dev']) {
-        await checkExternalLink(about.getByRole('link', { name: `${domain}/daiksud`, exact: true }), `https://${domain}/daiksud`);
+      for (const [name, domain] of [['GitHub', 'github.com'], ['X', 'x.com'], ['Zenn', 'zenn.dev']]) {
+        await checkExternalLink(about.getByRole('link', { name, exact: true }), `https://${domain}/daiksud`);
       }
       const commits = page.getByRole('region', { name: '最近のコミット', exact: true });
       for (const name of ['GitHub', 'GitHubで変更履歴を見る']) {
@@ -95,9 +95,10 @@ try {
       const ls = page.getByRole('region', { name: 'ようこそ', exact: true }).getByText('ls', { exact: true });
       assert.ok(await ls.isVisible(), 'NAV-03 table of contents is ls output');
       const commandBox = await ls.boundingBox();
-      assert.ok(commandBox.y + commandBox.height <= (await toc.boundingBox()).y,
+      const tocBox = await toc.boundingBox();
+      assert.ok(commandBox.y + commandBox.height <= tocBox.y + 1 || commandBox.x + commandBox.width <= tocBox.x + 1,
         'NAV-03 command precedes its output');
-      for (const [name, hash] of [['自己紹介', '#about'], ['最新の記事', '#posts'], ['タグ一覧', '#tags'], ['最近のコミット', '#commits']]) {
+      for (const [name, hash] of [['最新の記事', '#posts'], ['自己紹介', '#about'], ['最近のコミット', '#commits']]) {
         const target = page.getByRole('region', { name, exact: true });
         assert.equal(await target.count(), 1, 'NAV-03 unique named destination');
         const link = toc.getByRole('link', { name, exact: true });

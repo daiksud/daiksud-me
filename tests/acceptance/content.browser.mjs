@@ -4,8 +4,6 @@ export async function checkEmptyContent(page, base) {
   const main = page.getByRole('main');
   assert.ok(await page.getByRole('region', { name: '最新の記事', exact: true })
     .getByRole('heading', { name: '記事はまだありません。', exact: true }).isVisible(), 'Home explains the empty post collection');
-  assert.equal(await page.getByRole('region', { name: 'タグ一覧', exact: true }).getByRole('link').count(), 0,
-    'Home omits unused catalog tags');
   for (const path of ['/', '/posts', '/tags']) {
     assert.equal((await page.goto(new URL(path, base).href)).status(), 200, 'Empty collection pages are available');
     assert.equal(await page.getByRole('navigation', { name: 'タグ一覧', exact: true }).getByRole('link').count(), 0,
@@ -26,6 +24,18 @@ export async function checkArticleStart(article, title, command) {
   const titleBox = await article.getByRole('heading', { level: 1, name: title, exact: true }).boundingBox();
   assert.ok(commandBox.y + commandBox.height <= titleBox.y, 'POST-04 terminal command precedes the title');
   assert.equal((await article.getByRole('heading').first().innerText()).trim(), title, 'POST-04 title is the first article heading');
+  const articleBox = await article.boundingBox();
+  assert.ok(titleBox.x - articleBox.x <= 32 && articleBox.x + articleBox.width - titleBox.x - titleBox.width <= 32,
+    'POST-04 title fills the article pane with ordinary internal padding');
+  const firstSection = article.getByRole('heading', { level: 2 }).first();
+  if (await firstSection.count()) {
+    const sectionBox = await firstSection.boundingBox();
+    const endNavigation = await article.getByRole('navigation', { name: '記事ナビゲーション', exact: true }).boundingBox();
+    for (const box of [sectionBox, endNavigation]) {
+      assert.ok(Math.abs(box.x - titleBox.x) <= 1 && Math.abs(box.x + box.width - titleBox.x - titleBox.width) <= 1,
+        'POST-04 article title, body and end navigation share their reading width');
+    }
+  }
   await checkArticleNavigation(article);
 }
 
@@ -68,7 +78,9 @@ export async function checkFixtureContent(page, base) {
   await page.setViewportSize({ width: 1440, height: 900 });
   const main = page.getByRole('main');
   const navigation = page.getByRole('navigation', { name: 'ページナビゲーション', exact: true });
-  const colors = await tagColors(page.getByRole('region', { name: 'タグ一覧', exact: true }));
+  await navigation.getByRole('link', { name: 'タグ一覧', exact: true }).click();
+  const colors = await tagColors(main);
+  await navigation.getByRole('link', { name: 'ホーム', exact: true }).click();
   const sidebarTags = page.getByRole('navigation', { name: 'タグ一覧', exact: true });
   for (const [slug, color] of colors) {
     const link = sidebarTags.getByRole('link', { name: `#${slug}`, exact: true });
@@ -78,8 +90,8 @@ export async function checkFixtureContent(page, base) {
       return rect.width > 0 && rect.height > 0 && getComputedStyle(paint).backgroundColor === expected;
     }), color), `${slug} sidebar marker uses the same visible color`);
   }
-  await page.getByRole('region', { name: 'タグ一覧', exact: true }).getByRole('link', { name: '#fixture-tag', exact: true }).click();
-  assert.equal(new URL(page.url()).pathname + new URL(page.url()).hash, '/tags#tag-fixture-tag', 'Home tag opens its group');
+  await sidebarTags.getByRole('link', { name: '#fixture-tag', exact: true }).click();
+  assert.equal(new URL(page.url()).pathname + new URL(page.url()).hash, '/tags#tag-fixture-tag', 'Home sidebar tag opens its group');
   assert.ok(await main.getByRole('heading', { name: '#fixture-tag', exact: true }).isVisible());
   await navigation.getByRole('link', { name: 'ホーム', exact: true }).click();
   const latest = page.getByRole('region', { name: '最新の記事', exact: true });
@@ -156,7 +168,10 @@ export async function checkFixtureContent(page, base) {
         try {
           assert.equal((await direct.goto(new URL(`/${slug}`, base).href)).status(), 200);
           const article = direct.getByRole('article');
-          assert.equal(await article.getByRole('navigation', { name: '目次', exact: true }).count(),
+          if (width < 1000 && slug === 'fixture-post') {
+            await direct.locator('summary').filter({ hasText: 'この記事の目次' }).click();
+          }
+          assert.equal(await direct.getByRole('navigation', { name: '目次', exact: true }).count(),
             slug === 'fixture-post' ? 1 : 0, 'POST-05 with and without an article outline');
           const link = await checkArticleNavigation(article);
           await link.scrollIntoViewIfNeeded();
