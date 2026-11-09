@@ -12,7 +12,7 @@
     "test:smoke": "node scripts/ci/smoke.mjs",
     "test:unit": "vitest run src",
     "test:integration": "vitest run tests/content.build.test.mjs",
-    "test:acceptance": "npm run build && node scripts/ci/acceptance.mjs",
+    "test:acceptance": "pnpm run build && node scripts/ci/acceptance.mjs",
     "commitlint": "commitlint --strict"
   },
   "dependencies": {
@@ -31,10 +31,5 @@
     "vitest": "5.1.0",
     "wrangler": "4.136.3"
   },
-  "allowScripts": {
-    "esbuild@0.28.2": true,
-    "esbuild@0.28.1": true,
-    "workerd@1.20260921.1": true
-  },
-  "packageManager": "npm@11.19.1"
+  "packageManager": "pnpm@12.18.0"
 }

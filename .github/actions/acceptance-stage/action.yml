@@ -9,17 +9,19 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: install pnpm
+      uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
     - name: install Node.js
       uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
         node-version-file: .node-version
-        cache: npm
+        cache: pnpm
     - name: install dependencies
       shell: bash
-      run: npm ci
+      run: pnpm install --frozen-lockfile
     - name: install Chromium
       shell: bash
-      run: npm exec --no -- playwright install --with-deps --only-shell chromium
+      run: pnpm exec playwright install --with-deps --only-shell chromium
     - name: reader acceptance
       shell: bash
       env:
@@ -28,9 +30,9 @@ runs:
       run: |
         if [[ "$REQUIRE_PREVIEW" == true ]]; then
           test -n "$PREVIEW_URL"
-          npm run test:acceptance -- "$PREVIEW_URL"
+          pnpm run test:acceptance "$PREVIEW_URL"
         else
-          npm run test:acceptance
+          pnpm run test:acceptance
         fi
     - name: retain acceptance diagnostics
       if: always()
