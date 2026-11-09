@@ -17,13 +17,17 @@ async function runAcceptance(previewUrl) {
     ];
     for (const [index, [command, args, label]] of commands.entries()) {
       let result;
+      const started = Date.now();
       try {
         result = await execute(command, args, {
           timeout: label === 'integration' ? 180_000 : 120_000, maxBuffer: 8 * 1024 * 1024,
           env: { ...process.env, ACCEPTANCE_ARTIFACT_DIR: join(outputRoot, label) },
         });
       } catch (error) {
-        await writeFile(join(outputRoot, `command-${index + 1}.log`), `${error.stdout ?? ''}\n${error.stderr ?? error.message}`);
+        const details = JSON.stringify({ label, elapsedMs: Date.now() - started,
+          code: error.code, signal: error.signal, killed: error.killed });
+        await writeFile(join(outputRoot, `command-${index + 1}.log`),
+          `${details}\n${error.stack ?? error.message}\n${error.stdout ?? ''}\n${error.stderr ?? ''}`);
         throw error;
       }
       await writeFile(join(outputRoot, `command-${index + 1}.log`), `${result.stdout}\n${result.stderr}`);

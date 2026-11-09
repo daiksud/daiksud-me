@@ -22,6 +22,7 @@ async function checkExternalLink(link, href) {
 const browser = await chromium.launch();
 try {
   for (const width of empty ? [1440] : fixtures ? [390] : [1440, 1100, 961, 960, 390]) {
+    console.log(`Reader viewport ${width} started: ${base}`);
     const context = await browser.newContext({ viewport: { width, height: 1200 } });
     await context.tracing.start({ screenshots: true, snapshots: true });
     const page = await context.newPage();
@@ -179,6 +180,7 @@ try {
       throw error;
     } finally {
       await context.close();
+      console.log(`Reader viewport ${width} closed: ${base}`);
     }
   }
   console.log(empty ? 'Empty content acceptance passed' : fixtures ? 'Fixture content acceptance passed'
