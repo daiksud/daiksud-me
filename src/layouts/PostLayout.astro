@@ -2,6 +2,7 @@
 import type { MarkdownHeading } from 'astro';
 import Pane from '../components/Pane.astro';
 import PostTags from '../components/PostTags.astro';
+import TableOfContents from '../components/TableOfContents.astro';
 import TerminalPrompt from '../components/TerminalPrompt.astro';
 import { formatDate, formatIsoDate } from '../lib/date';
 import type { TagDefinition } from '../lib/tags';
@@ -35,7 +36,7 @@ const hasUpdatedAt = updatedAt && updatedAt.getTime() !== publishedAt.getTime();
 ---
 
 <SiteLayout type="article" title={title} description={description} siteTags={siteTags} activeSection="posts">
-  <div class="post-page">
+  <div class:list={['post-page', { 'has-toc': tocHeadings.length >= 2 }]}>
     <Pane as="article" class="post-pane" ariaLabelledBy="post-title">
       <header class="post-header">
         <p class="command-line post-command" lang="en">
@@ -59,16 +60,10 @@ const hasUpdatedAt = updatedAt && updatedAt.getTime() !== publishedAt.getTime();
         <PostTags tags={tags} tagDefinitions={siteTags} sourceId={slug} />
       </header>
       {tocHeadings.length >= 2 && (
-        <nav class="table-of-contents" aria-label="目次">
-          <p class="toc-label">目次</p>
-          <ul>
-            {tocHeadings.map((heading) => (
-              <li class:list={{ 'toc-subheading': heading.depth === 3 }}>
-                <a href={`#${heading.slug}`}>{heading.text}</a>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <details class="inline-toc">
+          <summary>この記事の目次</summary>
+          <TableOfContents headings={tocHeadings} />
+        </details>
       )}
       <div class="post-content">
         <slot />
@@ -77,24 +72,41 @@ const hasUpdatedAt = updatedAt && updatedAt.getTime() !== publishedAt.getTime();
         <a href="/posts">記事一覧</a>
       </nav>
     </Pane>
+    {tocHeadings.length >= 2 && (
+      <Pane as="aside" class="toc-pane" ariaLabel="この記事の目次">
+        <p class="toc-label">この記事の目次</p>
+        <TableOfContents headings={tocHeadings} />
+      </Pane>
+    )}
   </div>
 </SiteLayout>
 
 <style>
-  :where(.post-pane) {
-    min-height: 100%;
+  .post-pane {
+    padding: 1.5rem;
+
+    @media (max-width: 640px) {
+      padding: 1.25rem;
+    }
   }
 
   .post-page {
     min-width: 0;
-    min-height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--pane-gap);
+
+    @media (min-width: 1000px) {
+      &.has-toc {
+        grid-template-columns: minmax(0, 1fr) 208px;
+      }
+    }
   }
 
   .post-navigation {
     width: 100%;
     min-width: 0;
-    max-inline-size: 72ch;
-    margin-inline: auto;
     border-top: 1px solid var(--border);
     padding-top: 1rem;
     font-family: var(--sans);
@@ -109,8 +121,6 @@ const hasUpdatedAt = updatedAt && updatedAt.getTime() !== publishedAt.getTime();
   .post-header {
     display: grid;
     width: 100%;
-    max-inline-size: 72ch;
-    margin-inline: auto;
     padding-block: 1rem 1.5rem;
     border-bottom: 1px solid var(--border);
 
@@ -120,7 +130,7 @@ const hasUpdatedAt = updatedAt && updatedAt.getTime() !== publishedAt.getTime();
 
     h1 {
       margin-block: 1.4rem 0.65rem;
-      font-size: clamp(2rem, 4vw, 3rem);
+      font-size: clamp(1.75rem, 3vw, 2.25rem);
     }
 
     .post-description {
@@ -152,37 +162,58 @@ const hasUpdatedAt = updatedAt && updatedAt.getTime() !== publishedAt.getTime();
     }
   }
 
-  .table-of-contents {
-    width: 100%;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    max-inline-size: 72ch;
-    margin-inline: auto;
-    padding-block: 1rem;
-    font-family: var(--sans);
-    font-size: 0.9rem;
-    border-bottom: 1px solid var(--border);
+  .toc-pane {
+    display: none;
 
-    .toc-label {
-      margin-bottom: 0.5rem;
-      color: var(--muted);
+    @media (min-width: 1000px) {
+      display: grid;
+      position: sticky;
+      top: 1.5rem;
+      max-height: calc(100dvh - 3rem);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+  }
+
+  .toc-label {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+    margin-bottom: 0.5rem;
+    font-family: var(--sans);
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .inline-toc {
+    padding-block: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--sans);
+    font-size: 0.875rem;
+
+    summary {
+      min-height: 44px;
+      align-content: center;
+      cursor: pointer;
     }
 
-    .toc-subheading {
-      padding-inline-start: 1.25rem;
+    @media (min-width: 1000px) {
+      display: none;
     }
   }
 
   .post-content {
     width: 100%;
-    max-inline-size: 72ch;
-    margin-inline: auto;
+    min-width: 0;
     padding-block: 2rem 1rem;
     font-family: var(--sans);
     font-size: 1rem;
-    line-height: 1.95;
+    line-height: 1.85;
     word-break: normal;
     word-break: auto-phrase;
+
+    @media (min-width: 1280px) {
+      font-size: 1.125rem;
+    }
 
     & > :global(:first-child) {
       margin-top: 0;

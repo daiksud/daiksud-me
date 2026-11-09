@@ -1,0 +1,50 @@
+---
+import type { MarkdownHeading } from 'astro';
+
+interface Props {
+  headings: MarkdownHeading[];
+}
+
+const { headings } = Astro.props;
+---
+
+<nav class="table-of-contents" aria-label="目次">
+  <ul>
+    {headings.map((heading) => (
+      <li class:list={{ 'toc-subheading': heading.depth === 3 }}>
+        <a href={`#${heading.slug}`}>{heading.text}</a>
+      </li>
+    ))}
+  </ul>
+</nav>
+
+<style>
+  .table-of-contents {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-family: var(--sans);
+    font-size: 0.875rem;
+    line-height: 1.65;
+  }
+
+  a {
+    display: block;
+    padding-block: 0.5rem;
+    color: var(--muted);
+
+    &:hover {
+      color: var(--blue);
+    }
+  }
+
+  .toc-subheading {
+    padding-inline-start: 1rem;
+  }
+
+  @media (pointer: coarse) {
+    a {
+      min-height: 44px;
+      align-content: center;
+    }
+  }
+</style>
