@@ -1,0 +1,5 @@
+saveExact: true
+allowBuilds:
+  'esbuild@0.28.1 || 0.28.2': true
+  'workerd@1.20260921.1': true
+  fsevents: false

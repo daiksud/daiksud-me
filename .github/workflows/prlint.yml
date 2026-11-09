@@ -27,12 +27,17 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install message validation tools
-        uses: jdx/mise-action@82a612c5ab8bcda7cc5db6b7e81a8e7584c3dc6e # v5.2.3
+      - name: Install pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Install Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          version: 2026.10.8
-          install_args: bun node npm:@commitlint/cli
-          cache: false
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Validate current PR title and body
         env:
@@ -40,4 +45,4 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
           printf '%s\n\n%s\n' "$PR_TITLE" "$PR_BODY" |
-            mise exec bun npm:@commitlint/cli -- bun run --bun --no-install "$(mise which commitlint)" --strict
+            pnpm run commitlint
