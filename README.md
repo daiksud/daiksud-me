@@ -95,35 +95,35 @@ catalog:
 
 ### テストとビルド
 
-依存関係のインストール、Astroの開発・ビルド、テストにはBun `1.4.4` を使います。バージョンは [mise.toml](mise.toml) と [package.json](package.json) で固定し、依存関係は [bun.lock](bun.lock) で固定しています。AstroのコマンドではBunランタイムを明示的に選択します。型チェックには引き続き `astro check` を使い、`.astro` ファイルも対象にします。
+依存関係のインストール、Astroの開発・ビルド、テストにはNode.jsとnpmを使います。Node.jsのバージョンは [.node-version](.node-version) だけで指定します。[mise.toml](mise.toml) の `idiomatic_version_file_enable_tools = ["node"]` により、miseもこのファイルを読み取ります。GitHub Actionsのsetup-nodeは `node-version-file: .node-version`、Cloudflare Workers Buildsは標準のバージョンファイル検出で同じ指定を使います。mise.tomlの `tools.node` やpackage.jsonの `engines.node` にバージョンを重複指定しないでください。miseの[Node.jsバージョンファイルの仕様](https://mise.jdx.dev/lang/node.html#version-files)を参照してください。
 
-Wrangler用にNode.js `26.10.0` も使用します。Cloudflare Workers Buildsが読み取る [.node-version](.node-version) は、`mise.toml` で固定したNode.jsのバージョンと揃えてください。WranglerはNode.jsのshebangに従って実行し、デプロイコマンドにBunランタイムを強制しないでください。デプロイ記録用ワークフローはこれとは別に、GitHubランナーにプリインストールされたNode.jsを使って、信頼済みで外部依存のないURLヘルパーを実行します。
+npmのバージョンは [package.json](package.json) の `packageManager`、依存関係は [package-lock.json](package-lock.json) で固定しています。[.npmrc](.npmrc) の `save-exact=true` により、依存関係を追加するときもバージョンを完全一致で保存します。インストールスクリプトは `allowScripts` に記録したesbuildとworkerdのバージョンだけに許可します。型チェックには `astro check` を使い、`.astro` ファイルも対象にします。WranglerもNode.jsで実行します。デプロイ記録用ワークフローは、信頼済みのチェックアウトにある `.node-version` からNode.jsを用意し、外部依存のないURLヘルパーを実行します。
 
 ```sh
 mise trust mise.toml
 mise install
-mise exec -- bun install --frozen-lockfile
-mise exec -- bun run check
-mise exec -- bun run build
-mise exec -- bun run test:unit
+mise exec -- npm ci
+mise exec -- npm run check
+mise exec -- npm run build
+mise exec -- npm run test:unit
 ```
 
-ローカルのAstro開発サーバーは `mise exec -- bun run dev` で起動します。このプロジェクトのスクリプトを実行するときは `bun run check` と `bun run test` を使ってください。Bun組み込みの `check` と `test` は、それぞれ異なる動作をします。
+ローカルのAstro開発サーバーは `mise exec -- npm run dev` で起動します。コミットメッセージは、package.jsonの開発依存にあるcommitlintを `mise exec -- npm run commitlint` で実行して検証できます。
 
 テストは、入力と観測可能な結果を通じて公開インターフェースの契約を守ります。単体テストでは日付、タイトル、記事の並び順、コンテンツに基づくタグを検証します。フィクスチャを使う結合テストでは、有効なコンテンツをビルドし、タグの重複、古い記事にある未定義タグ、ルートの衝突に対するビルド時の診断を検証します。そのブラウザ検証では、隔離したフィクスチャコンテンツを使い、Markdownの読みやすさ、メタデータ、記事・タグの並び順、ナビゲーションを確認します。ソースの文面、YAMLの構造、生のHTML/CSS、クラス、生成された識別子、内部の呼び出し順序はテストで固定しません。受入テストの実行処理、ブラウザのアサーション、スモークチェック自体を対象にしたテストは設けません。
 
 ### ブラウザでの受入テスト
 
-読者向けのシナリオは [`docs/features`](docs/features) に日本語で記載します。執筆者向けのタグ定義と不正な参照のルールは [`docs/behavior/tags.feature.md`](docs/behavior/tags.feature.md) に記載します。`bun run test` はBunのテストランナーで、公開インターフェースの単体テストとフィクスチャを使う結合テストを実行します。`test:unit` は公開インターフェースに対する高速なテスト、`test:integration` は [`tests/content.build.test.mjs`](tests/content.build.test.mjs) と、その中で実際にブラウザを使うフィクスチャ検証を実行します。`test`、`test:integration`、受入テストを実行する前にChromiumをインストールしてください。`test:ci` は別のテストで、プロバイダーとデプロイの情報を入力し、返される結果からPreviewの選択・拒否を検証します。
+読者向けのシナリオは [`docs/features`](docs/features) に日本語で記載します。執筆者向けのタグ定義と不正な参照のルールは [`docs/behavior/tags.feature.md`](docs/behavior/tags.feature.md) に記載します。`npm run test` はVitestで、公開インターフェースの単体テストとフィクスチャを使う結合テストを実行します。`test:unit` は公開インターフェースに対する高速なテスト、`test:integration` は [`tests/content.build.test.mjs`](tests/content.build.test.mjs) と、その中で実際にブラウザを使うフィクスチャ検証を実行します。`test`、`test:integration`、受入テストを実行する前にChromiumをインストールしてください。`test:ci` は別のテストで、プロバイダーとデプロイの情報を入力し、返される結果からPreviewの選択・拒否を検証します。
 
 Playwrightのバージョンはロックファイルで固定しています。受入テストの前に、対応するChromium shellをインストールしてください。
 
 ```sh
-mise exec -- bun run test:ci
-mise exec -- bun run --bun playwright install --only-shell chromium
-mise exec -- bun run test
-mise exec -- bun run test:acceptance
-mise exec -- bun run test:acceptance "$PREVIEW_URL"
+mise exec -- npm run test:ci
+mise exec -- npm exec --no -- playwright install --only-shell chromium
+mise exec -- npm run test
+mise exec -- npm run test:acceptance
+mise exec -- npm run test:acceptance -- "$PREVIEW_URL"
 ```
 
 Linuxでブラウザに必要なシステム依存関係がない場合は、Playwrightの `install --with-deps --only-shell chromium` を使います。受入テストのコマンドは検証前にローカルの `dist` をビルドし、フィクスチャを使う結合テストと、画面幅1440・1100・961・960・390ピクセルでのローカルの読者操作を実行します。デプロイ記録と一致する `PREVIEW_URL` を指定すると、デプロイ済みPreviewに対しても同じ操作を検証します。PRのCIではこのURLの指定が必須です。mainへのpush時の受入テストではローカルビルドを使います。
@@ -134,9 +134,9 @@ Linuxでブラウザに必要なシステム依存関係がない場合は、Pla
 
 ### Cloudflare Workers Buildsの設定
 
-Workerの **Settings → Build** で、ビルドコマンドを `bun run build` に設定します。本番デプロイとPreviewの既存コマンド、およびWranglerの動作は維持します。これらのコマンドはNode.jsでWranglerを実行します。以前pnpmのビルドコマンドを設定していた場合は、Bunへの移行時に更新が必要です。
+Workerの **Settings → Build** で、ビルドコマンドを `npm run build` に設定します。本番デプロイとPreviewの既存コマンド、およびWranglerの動作は維持します。ビルドコマンドはCloudflare側の外部設定なので、リポジトリのファイルを変更しても更新されません。Bunから移行するときは、この外部設定の変更が必要です。
 
-Workers Buildsは [bun.lock](bun.lock) から依存関係のインストーラーを選び、[package.json](package.json) の `packageManager` からBunのバージョンを選びます。ビルドコマンドはCloudflare側の外部設定なので、リポジトリのファイルを変更しても更新されません。移行時には、ビルド設定と実際のPreviewビルドログの両方を確認してください。Cloudflareの[ビルド設定](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)と[ビルドイメージ・バージョンの選択](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)を参照してください。
+Workers Buildsは [package-lock.json](package-lock.json) からnpmを選び、package.jsonの `packageManager` からnpmのバージョンを選びます。Node.jsは `.node-version` を読み取ります。Cloudflare側に `NODE_VERSION` の上書きがある場合は、単一正本と食い違わないよう削除が必要です。移行時には、外部設定と実際のPreviewビルドログで、使用されたNode.js・npm・ビルドコマンドを確認してください。Cloudflareの[ビルド設定](https://developers.cloudflare.com/workers/ci-cd/builds/configuration/)と[ビルドイメージ・バージョンの選択](https://developers.cloudflare.com/workers/ci-cd/builds/build-image/)を参照してください。
 
 ### Codexの承認自動化とRulesetsの責務
 

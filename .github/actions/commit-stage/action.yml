@@ -15,25 +15,26 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: install tools
-      uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5 # v5.0.0
+    - name: install Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
       with:
-        cache: false
+        node-version-file: .node-version
+        cache: npm
     - name: install dependencies
       shell: bash
-      run: bun install --frozen-lockfile
+      run: npm ci
     - name: check
       shell: bash
-      run: bun run check
+      run: npm run check
     - name: build
       shell: bash
-      run: bun run build
+      run: npm run build
     - name: fast tests
       shell: bash
-      run: bun run test:unit
+      run: npm run test:unit
     - name: Preview selection tests
       shell: bash
-      run: bun run test:ci
+      run: npm run test:ci
     - name: wait for matched Preview
       id: preview
       if: inputs.preview == 'true'
@@ -43,7 +44,7 @@ runs:
         SOURCE_SHA: ${{ inputs.source-sha }}
         SOURCE_BRANCH: ${{ inputs.source-branch }}
       run: |
-        bun scripts/ci/preview.mjs "$SOURCE_SHA" "$SOURCE_BRANCH" > preview-evidence.json
+        node scripts/ci/preview.mjs "$SOURCE_SHA" "$SOURCE_BRANCH" > preview-evidence.json
         cat preview-evidence.json
         jq -er '"url=" + .previewUrl' preview-evidence.json >> "$GITHUB_OUTPUT"
     - name: root HTTP smoke
@@ -51,5 +52,5 @@ runs:
       shell: bash
       env:
         PREVIEW_URL: ${{ steps.preview.outputs.url }}
-      run: bun run test:smoke "$PREVIEW_URL"
+      run: npm run test:smoke -- "$PREVIEW_URL"
 
