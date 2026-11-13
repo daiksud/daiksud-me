@@ -98,37 +98,31 @@ const isActiveNavigationItem = (href: string) =>
 
 <style>
   body {
-    --sidebar-width: 200px;
+    --page-padding: 0.75rem;
     margin: 0;
+    width: 100%;
     min-height: 100svh;
     display: grid;
     grid-template-columns:
-      var(--pane-gap)
-      var(--sidebar-width)
+      240px
       var(--pane-gap)
       minmax(0, 1fr)
-      var(--pane-gap);
+      var(--page-padding);
     grid-template-rows:
       auto
       var(--pane-gap)
       minmax(0, 1fr)
       var(--pane-gap)
-      auto
-      var(--pane-gap);
+      auto;
     grid-template-areas:
-      "header header header header header"
-      ". . . . ."
-      ". sidebar . main ."
-      ". sidebar . . ."
-      ". sidebar . footer ."
-      ". . . . .";
+      "header header header header"
+      ". . . ."
+      "sidebar . main ."
+      ". . . ."
+      "footer footer footer footer";
 
-    @media (max-width: 1180px) {
-      --sidebar-width: 176px;
-    }
-
-    @media (max-width: 640px) {
-      grid-template-columns: var(--pane-gap) minmax(0, 1fr) var(--pane-gap);
+    @media (max-width: 1279px) {
+      grid-template-columns: var(--page-padding) minmax(0, 1fr) var(--page-padding);
       grid-template-rows:
         auto
         var(--pane-gap)
@@ -136,8 +130,7 @@ const isActiveNavigationItem = (href: string) =>
         var(--pane-gap)
         minmax(0, 1fr)
         var(--pane-gap)
-        auto
-        var(--pane-gap);
+        auto;
       grid-template-areas:
         "header header header"
         ". . ."
@@ -145,8 +138,7 @@ const isActiveNavigationItem = (href: string) =>
         ". . ."
         ". main ."
         ". . ."
-        ". footer ."
-        ". . .";
+        "footer footer footer";
     }
   }
 
@@ -172,13 +164,14 @@ const isActiveNavigationItem = (href: string) =>
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 2rem;
-    padding: 1.25rem 2rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
 
     @media (max-width: 640px) {
       min-height: 72px;
       grid-template-columns: minmax(0, 1fr);
+      gap: 0.65rem;
       padding: 1.2rem;
     }
   }
@@ -207,30 +200,26 @@ const isActiveNavigationItem = (href: string) =>
   }
 
   .header-tagline {
-    max-width: 8rem;
     border-left: 1px solid var(--border);
     padding-left: 1.5rem;
-    font-size: 0.72rem;
+    font-size: 0.875rem;
     color: var(--muted);
+    white-space: nowrap;
 
-    @media (max-width: 1180px) {
-      display: none;
+    @media (max-width: 640px) {
+      border-left: 0;
+      padding-left: 0;
+      white-space: normal;
     }
   }
   .sidebar-pane {
     grid-area: sidebar;
-    grid-template-rows: auto auto minmax(0, 1fr);
-    align-content: stretch;
+    align-self: start;
     align-items: start;
-    gap: 2rem;
-    padding: 2rem 1.25rem;
+    gap: 1.5rem;
+    padding: 1.5rem 1.25rem;
 
-    @media (max-width: 1180px) {
-      padding-inline: 1rem;
-    }
-
-    @media (max-width: 640px) {
-      grid-template-rows: auto;
+    @media (max-width: 1279px) {
       padding: 0.5rem 0.75rem;
     }
   }
@@ -265,25 +254,34 @@ const isActiveNavigationItem = (href: string) =>
       }
     }
 
-    @media (max-width: 640px) {
+    @media (max-width: 1279px) {
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 0.1rem;
+      gap: 0.4rem;
 
       a {
         grid-template-columns: auto auto;
         justify-content: center;
         min-width: 0;
-        gap: 0.2rem;
-        padding: 0.45rem 0.2rem;
+        gap: 0.5rem;
+        padding: 0.45rem;
         border-left: 0;
         border-bottom: 2px solid transparent;
-        font-size: clamp(0.62rem, 2.7vw, 0.76rem);
         white-space: nowrap;
 
         &[aria-current='page'],
         &.is-active {
           border-bottom-color: var(--blue);
         }
+      }
+    }
+
+    @media (max-width: 640px) {
+      gap: 0.1rem;
+
+      a {
+        gap: 0.2rem;
+        padding-inline: 0.2rem;
+        font-size: clamp(0.62rem, 2.7vw, 0.76rem);
       }
 
       & :global(.icon),
@@ -327,19 +325,18 @@ const isActiveNavigationItem = (href: string) =>
       font-size: 0.8rem;
     }
 
-    @media (max-width: 640px) {
+    @media (max-width: 1279px) {
       display: none;
     }
   }
 
   .sidebar-note {
-    align-self: end;
-    padding-top: 2rem;
+    padding-top: 0.5rem;
     font-size: 0.76rem;
     color: var(--muted);
     line-height: 1.8;
 
-    @media (max-width: 640px) {
+    @media (max-width: 1279px) {
       display: none;
     }
   }
@@ -351,6 +348,7 @@ const isActiveNavigationItem = (href: string) =>
 
   .footer-pane {
     grid-area: footer;
+    border-radius: 0;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 1rem;

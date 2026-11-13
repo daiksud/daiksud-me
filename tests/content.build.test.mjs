@@ -209,28 +209,46 @@ it('OG-02 shares one decodable branded image across pages', async () => {
   }
 }, 30_000);
 
-it('TOC-01 shows an ordered article outline before the body', async () => {
+it('TOC-01 shows an ordered sticky outline beside the article', async () => {
   const projectDir = await prepareProject();
-  await cp('tests/fixtures/toc/basic.md', join(projectDir, 'src/content/posts/toc.md'));
+  const fixture = await readFile('tests/fixtures/toc/basic.md', 'utf8');
+  const paragraphs = Array(32).fill('This paragraph keeps the article long enough to read while its outline remains available beside the text.').join('\n\n');
+  await writeFile(join(projectDir, 'src/content/posts/toc.md'), fixture + '\n\n' + paragraphs);
   execFileSync(process.execPath, [astroCli, 'build'], { cwd: projectDir, stdio: 'pipe' });
   const server = await serveBuild(join(projectDir, 'dist'));
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage();
-    await page.goto(`${server.url}/toc`);
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    await page.goto(server.url + '/toc');
+    const article = page.getByRole('article', { name: 'Outline fixture', exact: true });
+    const pane = page.getByRole('complementary', { name: 'この記事の目次', exact: true });
     const toc = page.getByRole('navigation', { name: '目次', exact: true });
-    expect(await toc.locator('a').allTextContents()).toEqual(['First section', 'Details']);
-    expect(await toc.locator('li').count()).toBe(2);
+    expect(await toc.getByRole('link').allTextContents()).toEqual(['First section', 'Details']);
+    expect(await toc.getByRole('listitem').count()).toBe(2);
     const outline = await toc.evaluate((nav) => {
       const links = [...nav.querySelectorAll('a')];
       return {
-        beforeBody: Boolean(nav.compareDocumentPosition(document.querySelector('.post-content')) & Node.DOCUMENT_POSITION_FOLLOWING),
-        afterHeader: Boolean(document.querySelector('.post-header').compareDocumentPosition(nav) & Node.DOCUMENT_POSITION_FOLLOWING),
         targets: links.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1)))?.textContent),
         indented: links[1].getBoundingClientRect().left > links[0].getBoundingClientRect().left,
       };
     });
-    expect(outline).toEqual({ beforeBody: true, afterHeader: true, targets: ['First section', 'Details'], indented: true });
+    expect(outline).toEqual({ targets: ['First section', 'Details'], indented: true });
+    const articleBox = await article.boundingBox();
+    const paneBox = await pane.boundingBox();
+    expect(paneBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width);
+    expect(Math.abs(paneBox.y - articleBox.y)).toBeLessThanOrEqual(1);
+    expect(await article.getByRole('navigation', { name: '目次', exact: true }).count()).toBe(0);
+
+    await page.evaluate(() => window.scrollTo({ top: 450, behavior: 'instant' }));
+    const firstPane = await pane.boundingBox();
+    const firstArticle = await article.boundingBox();
+    await page.evaluate(() => window.scrollTo({ top: 700, behavior: 'instant' }));
+    const secondPane = await pane.boundingBox();
+    const secondArticle = await article.boundingBox();
+    expect(firstPane.y).toBeGreaterThanOrEqual(0);
+    expect(secondPane.y + secondPane.height).toBeLessThanOrEqual(900);
+    expect(Math.abs(firstPane.y - secondPane.y)).toBeLessThanOrEqual(1);
+    expect(secondArticle.y).toBeLessThan(firstArticle.y - 200);
   } finally {
     await browser.close();
     await server.close();
@@ -240,41 +258,46 @@ it('TOC-01 shows an ordered article outline before the body', async () => {
 it('TOC-02a omits outlines for zero or one heading', async () => {
   const projectDir = await prepareProject();
   execFileSync(process.execPath, [astroCli, 'build'], { cwd: projectDir, stdio: 'pipe' });
+  const server = await serveBuild(join(projectDir, 'dist'));
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
     for (const slug of ['second-post', 'profile']) {
-      await page.setContent(await readFile(join(projectDir, 'dist', slug, 'index.html'), 'utf8'));
+      await page.goto(server.url + '/' + slug);
       expect(await page.getByRole('navigation', { name: '目次', exact: true }).count()).toBe(0);
-      expect(await page.locator('.table-of-contents').count()).toBe(0);
+      expect(await page.getByRole('complementary', { name: 'この記事の目次', exact: true }).count()).toBe(0);
+      expect(await page.locator('summary').filter({ hasText: 'この記事の目次' }).count()).toBe(0);
     }
   } finally {
     await browser.close();
+    await server.close();
   }
 }, 30_000);
 
 it('TOC-02b includes only h2 and h3, including on Profile', async () => {
   const projectDir = await prepareProject();
   for (const slug of ['toc', 'profile']) {
-    await cp('tests/fixtures/toc/mixed.md', join(projectDir, `src/content/posts/${slug}.md`));
+    await cp('tests/fixtures/toc/mixed.md', join(projectDir, 'src/content/posts/' + slug + '.md'));
   }
   await cp('tests/fixtures/toc/excluded.md', join(projectDir, 'src/content/posts/excluded.md'));
   execFileSync(process.execPath, [astroCli, 'build'], { cwd: projectDir, stdio: 'pipe' });
+  const server = await serveBuild(join(projectDir, 'dist'));
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage();
     for (const slug of ['toc', 'profile', 'excluded']) {
-      await page.setContent(await readFile(join(projectDir, 'dist', slug, 'index.html'), 'utf8'));
+      await page.goto(server.url + '/' + slug);
       const toc = page.getByRole('navigation', { name: '目次', exact: true });
-      expect(await toc.locator('a').allTextContents()).toEqual(slug === 'excluded' ? [] : ['First section', 'Details']);
-      expect(await page.locator('.table-of-contents').count()).toBe(slug === 'excluded' ? 0 : 1);
+      expect(await toc.getByRole('link').allTextContents()).toEqual(slug === 'excluded' ? [] : ['First section', 'Details']);
+      expect(await toc.count()).toBe(slug === 'excluded' ? 0 : 1);
     }
   } finally {
     await browser.close();
+    await server.close();
   }
 }, 30_000);
 
-it('TOC-03 preserves readable text and renderer destinations', async () => {
+it('TOC-03 opens a mobile outline and preserves native heading links without JavaScript', async () => {
   const projectDir = await prepareProject();
   await cp('tests/fixtures/toc/labels.md', join(projectDir, 'src/content/posts/toc.md'));
   execFileSync(process.execPath, [astroCli, 'build'], { cwd: projectDir, stdio: 'pipe' });
@@ -282,28 +305,43 @@ it('TOC-03 preserves readable text and renderer destinations', async () => {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ javaScriptEnabled: false, viewport: { width: 390, height: 600 } });
-    await page.goto(`${server.url}/toc`);
+    await page.goto(server.url + '/toc');
+    const disclosure = page.locator('summary').filter({ hasText: 'この記事の目次' });
     const toc = page.getByRole('navigation', { name: '目次', exact: true });
-    const labels = await toc.locator('a').allTextContents();
+    expect(await disclosure.isVisible()).toBe(true);
+    expect(await toc.count()).toBe(0);
+    await disclosure.focus();
+    await page.keyboard.press('Enter');
+    expect(await toc.count()).toBe(1);
+    const article = page.getByRole('article');
+    const headerBox = await article.locator('header').boundingBox();
+    const disclosureBox = await disclosure.boundingBox();
+    const tocBox = await toc.boundingBox();
+    const firstSection = await article.getByRole('heading', { level: 2 }).first().boundingBox();
+    expect(disclosureBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height);
+    expect(tocBox.y + tocBox.height).toBeLessThanOrEqual(firstSection.y);
+
+    const links = toc.getByRole('link');
+    const labels = await links.allTextContents();
     expect(labels).toEqual(['日本語の見出し', '日本語の見出し', 'With emphasis and code', '<span> & “quoted”']);
-    expect(await toc.locator('a > *').count()).toBe(0);
-    const destinations = await toc.locator('a').evaluateAll((links) => links.map((link) => decodeURIComponent(link.hash.slice(1))));
+    const destinations = await links.evaluateAll((links) => links.map((link) => decodeURIComponent(link.hash.slice(1))));
+    const headings = article.locator('h2, h3');
     expect(new Set(destinations).size).toBe(4);
-    expect(destinations).toEqual(await page.locator('.post-content h2, .post-content h3').evaluateAll((headings) => headings.map((heading) => heading.id)));
-    expect(labels).toEqual(await page.locator('.post-content h2, .post-content h3').allTextContents());
-    const repeated = toc.locator('a').nth(1);
-    await repeated.click();
+    expect(destinations).toEqual(await headings.evaluateAll((headings) => headings.map((heading) => heading.id)));
+    expect(labels).toEqual(await headings.allTextContents());
+    await links.nth(1).click();
     expect(await page.locator(':target').getAttribute('id')).toBe(destinations[1]);
     expect(await page.locator(':target').textContent()).toBe('日本語の見出し');
     expect(await page.locator(':target').evaluate((heading) => {
       const rect = heading.getBoundingClientRect();
       return rect.bottom > 0 && rect.top < innerHeight;
     })).toBe(true);
-    await page.goto(`${server.url}/toc`);
-    for (let step = 0; step < 40 && !await toc.locator('a').first().evaluate((link) => link === document.activeElement); step++) {
-      await page.keyboard.press('Tab');
-    }
-    expect(await toc.locator('a').first().evaluate((link) => {
+
+    await page.goto(server.url + '/toc');
+    await disclosure.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab');
+    expect(await links.first().evaluate((link) => {
       const style = getComputedStyle(link);
       return link === document.activeElement && link.matches(':focus-visible') && style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0;
     })).toBe(true);
@@ -315,27 +353,52 @@ it('TOC-03 preserves readable text and renderer destinations', async () => {
   }
 }, 30_000);
 
-it('TOC-04 fits long labels within mobile and desktop articles', async () => {
+it('TOC-04 keeps long outlines readable within mobile and desktop viewports', async () => {
   const projectDir = await prepareProject();
-  await cp('tests/fixtures/toc/long.md', join(projectDir, 'src/content/posts/toc.md'));
+  const fixture = await readFile('tests/fixtures/toc/long.md', 'utf8');
+  const sections = Array.from({ length: 24 }, (_, index) => '\n\n## Additional section ' + (index + 1) + '\n\nSupporting article content.').join('');
+  await writeFile(join(projectDir, 'src/content/posts/toc.md'), fixture + sections);
   execFileSync(process.execPath, [astroCli, 'build'], { cwd: projectDir, stdio: 'pipe' });
   const server = await serveBuild(join(projectDir, 'dist'));
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ javaScriptEnabled: false });
-    for (const width of [390, 1440]) {
+    for (const width of [390, 999, 1000, 1280, 1920]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.goto(`${server.url}/toc`);
-      const geometry = await page.getByRole('navigation', { name: '目次', exact: true }).evaluate((nav) => {
-        const article = nav.closest('article').getBoundingClientRect();
+      await page.goto(server.url + '/toc');
+      if (width < 1000) await page.locator('summary').filter({ hasText: 'この記事の目次' }).click();
+      const toc = page.getByRole('navigation', { name: '目次', exact: true });
+      const geometry = await toc.evaluate((nav) => {
         const box = nav.getBoundingClientRect();
         return {
           documentFits: document.documentElement.scrollWidth <= innerWidth,
-          tocFits: box.left >= article.left && box.right <= article.right && nav.scrollWidth <= nav.clientWidth,
+          tocFits: box.left >= 0 && box.right <= innerWidth && nav.scrollWidth <= nav.clientWidth,
           linksFit: [...nav.querySelectorAll('a')].every((link) => [...link.getClientRects()].every((rect) => rect.left >= box.left && rect.right <= box.right + 1)),
         };
       });
       expect(geometry).toEqual({ documentFits: true, tocFits: true, linksFit: true });
+      const articleBox = await page.getByRole('article').boundingBox();
+      const tocBox = await toc.boundingBox();
+      if (width >= 1000) {
+        expect(tocBox.x).toBeGreaterThanOrEqual(articleBox.x + articleBox.width);
+        await page.evaluate(() => window.scrollTo({ top: 450, behavior: 'instant' }));
+        const pane = await page.getByRole('complementary', { name: 'この記事の目次', exact: true }).boundingBox();
+        expect(pane.y).toBeGreaterThanOrEqual(0);
+        expect(pane.y + pane.height).toBeLessThanOrEqual(900);
+      } else {
+        expect(tocBox.x).toBeGreaterThanOrEqual(articleBox.x);
+        expect(tocBox.x + tocBox.width).toBeLessThanOrEqual(articleBox.x + articleBox.width);
+      }
+      if (width === 1920) {
+        const header = await page.getByRole('banner').evaluate((element) => {
+          const { left, right } = element.getBoundingClientRect();
+          return { left, right, viewportWidth: document.documentElement.clientWidth };
+        });
+        expect(Math.abs(header.left)).toBeLessThanOrEqual(1);
+        expect(Math.abs(header.right - header.viewportWidth)).toBeLessThanOrEqual(1);
+      }
+      await toc.getByRole('link').last().click();
+      expect(await page.locator(':target').textContent()).toBe('Additional section 24');
     }
   } finally {
     await browser.close();

@@ -21,7 +21,7 @@ async function checkExternalLink(link, href) {
 }
 const browser = await chromium.launch();
 try {
-  for (const width of empty ? [1440] : fixtures ? [390] : [1440, 1100, 961, 960, 390]) {
+  for (const width of empty ? [1440] : fixtures ? [390] : [1920, 1440, 1280, 1279, 1000, 999, 390]) {
     console.log(`Reader viewport ${width} started: ${base}`);
     const context = await browser.newContext({ viewport: { width, height: 1200 } });
     await context.tracing.start({ screenshots: true, snapshots: true });
@@ -41,6 +41,12 @@ try {
     const main = page.getByRole('main');
     const checkSharedNavigation = async () => {
       await checkFeedDiscovery(page);
+      const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
+      for (const role of ['banner', 'contentinfo']) {
+        const box = await page.getByRole(role).boundingBox();
+        assert.ok(Math.abs(box.x) <= 1 && Math.abs(box.x + box.width - viewportWidth) <= 1,
+          `NAV-01 ${role} spans the viewport at ${width}px`);
+      }
       assert.equal(await navigation.getByRole('link').count(), 4, 'NAV-01 exactly four site pages');
       for (const [name, href] of [['ホーム', '/'], ['記事一覧', '/posts'], ['タグ一覧', '/tags'], ['プロフィール', '/profile']]) {
         assert.equal(await navigation.getByRole('link', { name, exact: true }).getAttribute('href'), href, 'NAV-01 shared navigation');
@@ -61,6 +67,20 @@ try {
       assert.equal((await heading.innerText()).trim(), title, 'POST-01 post title');
       const article = main.getByRole('article', { name: title, exact: true });
       assert.ok(await article.isVisible(), 'POST-04 accessible article');
+      const mainBox = await main.boundingBox();
+      const articleBox = await article.boundingBox();
+      const outline = main.getByRole('complementary', { name: 'この記事の目次', exact: true });
+      const outlineBox = await outline.count() ? await outline.boundingBox() : null;
+      const groupRight = outlineBox ? outlineBox.x + outlineBox.width : articleBox.x + articleBox.width;
+      assert.ok(Math.abs(groupRight - articleBox.x - Math.min(1200, mainBox.width)) <= 1,
+        'NAV-05 article and contents together use at most 1200px and fit narrower main areas');
+      assert.ok(Math.abs(articleBox.x - mainBox.x - (mainBox.x + mainBox.width - groupRight)) <= 1,
+        'NAV-05 article and contents are centered together within the main area');
+      if (width >= 1280) {
+        const menuBox = await page.getByRole('complementary', { name: 'サイトメニュー', exact: true }).boundingBox();
+        assert.ok(Math.abs(menuBox.x) <= 1 && Math.abs(menuBox.width - 240) <= 1,
+          'NAV-05 article centering preserves the desktop menu at the viewport left edge');
+      }
       await checkArticleStart(article, title, `cat ${decodeURIComponent(href.slice(1))}.md`);
       assert.equal(await navigation.getByRole('link', { name: '記事一覧', exact: true }).getAttribute('aria-current'), null,
         'POST-01 index is not current page');
@@ -85,8 +105,8 @@ try {
       await page.mouse.move(0, 0);
       const inactivePosts = await postsNavigation.screenshot({ animations: 'disabled' });
       const about = page.getByRole('region', { name: '自己紹介', exact: true });
-      for (const domain of ['github.com', 'x.com', 'zenn.dev']) {
-        await checkExternalLink(about.getByRole('link', { name: `${domain}/daiksud`, exact: true }), `https://${domain}/daiksud`);
+      for (const [name, domain] of [['GitHub', 'github.com'], ['X', 'x.com'], ['Zenn', 'zenn.dev']]) {
+        await checkExternalLink(about.getByRole('link', { name, exact: true }), `https://${domain}/daiksud`);
       }
       const commits = page.getByRole('region', { name: '最近のコミット', exact: true });
       for (const name of ['GitHub', 'GitHubで変更履歴を見る']) {
@@ -96,9 +116,10 @@ try {
       const ls = page.getByRole('region', { name: 'ようこそ', exact: true }).getByText('ls', { exact: true });
       assert.ok(await ls.isVisible(), 'NAV-03 table of contents is ls output');
       const commandBox = await ls.boundingBox();
-      assert.ok(commandBox.y + commandBox.height <= (await toc.boundingBox()).y,
+      const tocBox = await toc.boundingBox();
+      assert.ok(commandBox.y + commandBox.height <= tocBox.y + 1 || commandBox.x + commandBox.width <= tocBox.x + 1,
         'NAV-03 command precedes its output');
-      for (const [name, hash] of [['自己紹介', '#about'], ['最新の記事', '#posts'], ['タグ一覧', '#tags'], ['最近のコミット', '#commits']]) {
+      for (const [name, hash] of [['最新の記事', '#posts'], ['自己紹介', '#about'], ['最近のコミット', '#commits']]) {
         const target = page.getByRole('region', { name, exact: true });
         assert.equal(await target.count(), 1, 'NAV-03 unique named destination');
         const link = toc.getByRole('link', { name, exact: true });
@@ -184,7 +205,7 @@ try {
     }
   }
   console.log(empty ? 'Empty content acceptance passed' : fixtures ? 'Fixture content acceptance passed'
-    : 'Reader acceptance passed: NAV-01 NAV-02 NAV-03 NAV-04 POST-01 POST-03 POST-04 TAG-01 NOTFOUND-01 NOTFOUND-02');
+    : 'Reader acceptance passed: NAV-01 NAV-02 NAV-03 NAV-04 NAV-05 POST-01 POST-03 POST-04 TAG-01 NOTFOUND-01 NOTFOUND-02');
 } finally {
   await browser.close();
 }
