@@ -67,6 +67,20 @@ try {
       assert.equal((await heading.innerText()).trim(), title, 'POST-01 post title');
       const article = main.getByRole('article', { name: title, exact: true });
       assert.ok(await article.isVisible(), 'POST-04 accessible article');
+      const mainBox = await main.boundingBox();
+      const articleBox = await article.boundingBox();
+      const outline = main.getByRole('complementary', { name: 'この記事の目次', exact: true });
+      const outlineBox = await outline.count() ? await outline.boundingBox() : null;
+      const groupRight = outlineBox ? outlineBox.x + outlineBox.width : articleBox.x + articleBox.width;
+      assert.ok(Math.abs(groupRight - articleBox.x - Math.min(1200, mainBox.width)) <= 1,
+        'NAV-05 article and contents together use at most 1200px and fit narrower main areas');
+      assert.ok(Math.abs(articleBox.x - mainBox.x - (mainBox.x + mainBox.width - groupRight)) <= 1,
+        'NAV-05 article and contents are centered together within the main area');
+      if (width >= 1280) {
+        const menuBox = await page.getByRole('complementary', { name: 'サイトメニュー', exact: true }).boundingBox();
+        assert.ok(Math.abs(menuBox.x) <= 1 && Math.abs(menuBox.width - 240) <= 1,
+          'NAV-05 article centering preserves the desktop menu at the viewport left edge');
+      }
       await checkArticleStart(article, title, `cat ${decodeURIComponent(href.slice(1))}.md`);
       assert.equal(await navigation.getByRole('link', { name: '記事一覧', exact: true }).getAttribute('aria-current'), null,
         'POST-01 index is not current page');
@@ -191,7 +205,7 @@ try {
     }
   }
   console.log(empty ? 'Empty content acceptance passed' : fixtures ? 'Fixture content acceptance passed'
-    : 'Reader acceptance passed: NAV-01 NAV-02 NAV-03 NAV-04 POST-01 POST-03 POST-04 TAG-01 NOTFOUND-01 NOTFOUND-02');
+    : 'Reader acceptance passed: NAV-01 NAV-02 NAV-03 NAV-04 NAV-05 POST-01 POST-03 POST-04 TAG-01 NOTFOUND-01 NOTFOUND-02');
 } finally {
   await browser.close();
 }
