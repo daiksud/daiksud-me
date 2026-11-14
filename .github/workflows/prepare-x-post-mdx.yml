@@ -43,7 +43,7 @@ jobs:
           JS
           # Preserve the pre-integration dependency resolutions; add only MDX again.
           git show 79f914a27efadf3f7ec886c05b5d185ab2994ba6:pnpm-lock.yaml > pnpm-lock.yaml
-          pnpm install --lockfile-only --no-frozen-lockfile --minimum-release-age-strict
+          pnpm install --lockfile-only --no-frozen-lockfile
           git diff --exit-code -- pnpm-workspace.yaml
           pnpm install --frozen-lockfile
           git diff --check
