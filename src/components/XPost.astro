@@ -1,0 +1,13 @@
+---
+interface Props {
+  url: string;
+}
+
+const { url } = Astro.props;
+---
+
+<blockquote class="twitter-tweet" data-theme="dark" data-lang="ja" data-dnt="true">
+  <slot />
+  <a href={url} target="_blank" rel="noopener">Xで投稿を見る</a>
+</blockquote>
+<script is:inline async src="https://platform.x.com/widgets.js" charset="utf-8"></script>
