@@ -405,3 +405,75 @@ it('TOC-04 keeps long outlines readable within mobile and desktop viewports', as
     await server.close();
   }
 }, 30_000);
+
+
+it('MDX-01 keeps MDX articles discoverable and quoted X posts readable without the widget', async () => {
+  const projectDir = await prepareProject();
+  await writeFile(join(projectDir, 'src/content/posts/x-post.mdx'), `---
+title: X post fixture
+description: An article with a quoted X post.
+publishedAt: 2026-01-05
+tags: [fixture-tag]
+---
+
+import XPost from '../../components/XPost.astro';
+
+## Embedded post
+
+<XPost url="https://x.com/t_wada/status/904916106153828352">
+  <p>Quoted post text.</p>
+  <p>Example author, 2026-01-05</p>
+</XPost>
+
+## Details
+
+A note stays available.[^note]
+
+| Kind | Value |
+| --- | --- |
+| Example | Available |
+
+[^note]: A footnote stays readable.
+`);
+  execFileSync(process.execPath, [astroCli, 'build'], { cwd: projectDir, stdio: 'pipe' });
+  const server = await serveBuild(join(projectDir, 'dist'));
+  const browser = await chromium.launch();
+  try {
+    for (const javaScriptEnabled of [false, true]) {
+      const context = await browser.newContext({ javaScriptEnabled });
+      try {
+        await context.route('https://platform.x.com/widgets.js', (route) => route.abort());
+        const page = await context.newPage();
+        for (const width of [390, 1440]) {
+          await page.setViewportSize({ width, height: 900 });
+          expect((await page.goto(server.url + '/x-post')).status()).toBe(200);
+          expect(await page.getByRole('heading', { level: 1, name: 'X post fixture' }).count()).toBe(1);
+          expect(await page.getByText('Quoted post text.', { exact: true }).isVisible()).toBe(true);
+          expect(await page.getByText('Example author, 2026-01-05', { exact: true }).isVisible()).toBe(true);
+          const source = page.getByRole('link', { name: 'Xで投稿を見る', exact: true });
+          expect(await source.getAttribute('href')).toBe('https://x.com/t_wada/status/904916106153828352');
+          expect(await source.getAttribute('target')).toBe('_blank');
+          expect((await source.getAttribute('rel')).split(/\s+/)).toContain('noopener');
+          expect(await page.getByRole('table').count()).toBe(1);
+          expect(await page.getByText('A footnote stays readable.', { exact: false }).count()).toBeGreaterThan(0);
+          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        }
+        // These attributes and the script URL are the public X embed contract.
+        expect(await page.locator('blockquote.twitter-tweet a').getAttribute('href')).toBe('https://x.com/t_wada/status/904916106153828352');
+        expect(await page.locator('script[src="https://platform.x.com/widgets.js"]').count()).toBe(1);
+        for (const path of ['/', '/posts', '/tags']) {
+          await page.goto(server.url + path);
+          expect(await page.locator('a[href="/x-post"]').count()).toBeGreaterThan(0);
+          expect(await page.locator('script[src="https://platform.x.com/widgets.js"]').count()).toBe(0);
+        }
+        const feed = await parseFeed(page, await readFile(join(projectDir, 'dist/rss.xml'), 'utf8'));
+        expect(feed.items.find((item) => item.guid === 'https://daiksud.me/x-post')?.title).toBe('X post fixture');
+      } finally {
+        await context.close();
+      }
+    }
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+}, 60_000);
