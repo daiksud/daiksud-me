@@ -7,6 +7,8 @@ tags:
   - development
 ---
 
+import XPost from '../../components/XPost.astro';
+
 皆さんは「ADR」をご存知でしょうか？
 
 ADR は "Architecture Decision Record" の略称だとされるのが一般的です。
@@ -100,14 +102,16 @@ ADRについて調べると、だいたい以下のような感じで残すよ�
 
 これを考える上で、大きくインスピレーションを受けたのは、t_wada さんの以下のポストです。
 
-> コードには How\
-> テストコードには What\
-> コミットログには Why\
-> コードコメントには Why not
->
-> を書こうという話をした
->
-> — [Takuto Wada (@t_wada), 2017年9月5日](https://x.com/t_wada/status/904916106153828352)
+<XPost url="https://x.com/t_wada/status/904916106153828352">
+  <p lang="ja" dir="ltr">
+    コードには How<br />
+    テストコードには What<br />
+    コミットログには Why<br />
+    コードコメントには Why not<br /><br />
+    を書こうという話をした
+  </p>
+  <p>Takuto Wada (@t_wada), 2017年9月5日</p>
+</XPost>
 
 特に「**コミットログには Why**」がもっとも影響を受けました。これ以外はすべて「ファイルに書いてGitにコミットする」ものですが、コミットログだけは異なります。このコミットログを記録にうまく組み込むことが、すごく良い案だと感じました。
 
